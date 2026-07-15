@@ -1,0 +1,92 @@
+{
+  "id": "agentic-orchestration",
+  "name": "Agentic Orchestration",
+  "description": "Replaces OpenClaw's native LLM call with a deterministic multi-agent workflow via CrewAI. Auto-installs and starts the agentic-orchestration backend sidecar. Supports model-agnostic routing (Ollama, OpenAI, Anthropic), MCP tools, and session-persistent memory.",
+  "version": "1.0.0",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": []
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "endpoint": {
+        "type": "string",
+        "default": "http://127.0.0.1:3847/api/v1/orchestrate",
+        "description": "URL of the agentic-orchestration HTTP endpoint (overridden automatically when managedBackend is true)"
+      },
+      "apiKey": {
+        "type": "string",
+        "description": "Optional bearer token matching AGENTIC_ORCHESTRATE_API_KEY in the web server"
+      },
+      "timeoutMs": {
+        "type": "number",
+        "default": 120000,
+        "description": "Max wait time in milliseconds for the orchestration backend to respond"
+      },
+      "runMode": {
+        "type": "string",
+        "enum": ["dynamic", "dynamic-iterative"],
+        "default": "dynamic",
+        "description": "dynamic = single planning pass; dynamic-iterative = re-plans between steps"
+      },
+      "sessionPassthrough": {
+        "type": "boolean",
+        "default": true,
+        "description": "Pass OpenClaw sessionKey to agentic-orchestration so memory persists across turns"
+      },
+      "fallbackOnError": {
+        "type": "boolean",
+        "default": false,
+        "description": "If true, fall through to OpenClaw's native LLM on backend failure. If false, surface the error as a reply."
+      },
+      "verboseCrew": {
+        "type": "boolean",
+        "default": false,
+        "description": "Pass --verbose to CrewAI (useful for debugging; verbose output included in reply)"
+      },
+      "managedBackend": {
+        "type": "boolean",
+        "default": true,
+        "description": "Clone/pull agentic-orchestration and start agentic-orchestration-web as a plugin service"
+      },
+      "repoUrl": {
+        "type": "string",
+        "default": "https://github.com/zlatko-lakisic/agentic-orchestration.git",
+        "description": "Git URL used when no local checkout is found"
+      },
+      "installDir": {
+        "type": "string",
+        "description": "Optional override for sidecar install root (default: <openclaw-state>/agentic-orchestration)"
+      },
+      "preferLocalCheckout": {
+        "type": "boolean",
+        "default": true,
+        "description": "Prefer a sibling/local agentic-orchestration checkout when present"
+      },
+      "autoUpdate": {
+        "type": "boolean",
+        "default": true,
+        "description": "git fetch/reset on start when using the cloned repo"
+      },
+      "backendHost": {
+        "type": "string",
+        "default": "127.0.0.1",
+        "description": "Bind host for the managed web server"
+      },
+      "backendPort": {
+        "type": "number",
+        "default": 3847,
+        "description": "Bind port for the managed web server"
+      },
+      "bootstrapTimeoutMs": {
+        "type": "number",
+        "default": 600000,
+        "description": "Max wait for clone, dependency install, and health check"
+      }
+    }
+  }
+}
