@@ -213,3 +213,8 @@ clawhub package publish zlatko-lakisic/agentic-orchestration
 ## License
 
 Apache-2.0
+
+## Security
+
+See **[SECURITY.md](SECURITY.md)** for how to report vulnerabilities, the plugin threat model (managed backend, conversation hooks, HTTP bridge), and operator hardening. Engine issues: [agentic-orchestration/SECURITY.md](https://github.com/zlatko-lakisic/agentic-orchestration/blob/main/SECURITY.md).
+

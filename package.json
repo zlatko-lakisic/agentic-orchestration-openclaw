@@ -12,7 +12,8 @@
     "patches",
     "assets",
     "openclaw.plugin.json",
-    "README.md"
+    "README.md",
+    "SECURITY.md"
   ],
   "scripts": {
     "build": "tsc && node scripts/strip-test-artifacts.mjs",
