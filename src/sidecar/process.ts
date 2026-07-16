@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import type { PluginConfig } from "../types.js";
+import { buildBackendEnv } from "./child-env.js";
 import { DEFAULT_BACKEND_HOST, DEFAULT_BACKEND_PORT, resolveManagedBaseUrl } from "./paths.js";
 
 type Logger = {
@@ -73,18 +74,15 @@ export class BackendProcess {
     const host = this.config.backendHost || DEFAULT_BACKEND_HOST;
     const port = String(this.config.backendPort || DEFAULT_BACKEND_PORT);
 
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
+    const env = buildBackendEnv({
       AGENTIC_WEB_HOST: host,
       AGENTIC_WEB_PORT: port,
       AGENTIC_PYTHON: params.pythonPath,
       AGENTIC_TOOL_ROOT: params.toolDir,
       AGENTIC_WEB_AUTO_INSTALL_REQUIREMENTS: "1",
       AGENTIC_AUTO_ENSURE_RUNTIME: process.env.AGENTIC_AUTO_ENSURE_RUNTIME || "1",
-    };
-    if (this.config.apiKey) {
-      env.AGENTIC_ORCHESTRATE_API_KEY = this.config.apiKey;
-    }
+      ...(this.config.apiKey ? { AGENTIC_ORCHESTRATE_API_KEY: this.config.apiKey } : {}),
+    });
 
     this.logger.info(
       `[agentic-orchestration] Starting agentic-orchestration-web on ${host}:${port}`,

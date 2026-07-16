@@ -1,6 +1,6 @@
 {
   "name": "@zlatko-lakisic/openclaw-agentic-orchestration",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "OpenClaw plugin that auto-installs/starts agentic-orchestration and routes agent turns through the multi-agent backend",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,10 +15,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/strip-test-artifacts.mjs",
     "dev": "tsc --watch",
     "check": "tsc --noEmit",
-    "test": "npm run build && node --test dist/src/config.test.js dist/src/client.test.js dist/src/hook.test.js dist/src/credentials.test.js dist/src/inject.test.js",
+    "test": "tsc && node --test dist/src/config.test.js dist/src/client.test.js dist/src/hook.test.js dist/src/credentials.test.js dist/src/inject.test.js",
     "prepublishOnly": "npm run build"
   },
   "openclaw": {

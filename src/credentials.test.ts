@@ -13,7 +13,7 @@ test("resolveAgentEnv defaults to Ollama when no keys", () => {
 
   try {
     const env = resolveAgentEnv({ openClawConfig: {} });
-    assert.equal(env.OLLAMA_HOST, "http://127.0.0.1:11434");
+    assert.equal(env.OLLAMA_HOST, "http://localhost:11434");
     assert.equal(env.AGENTIC_PLANNER_MODEL, "ollama/llama3.2");
   } finally {
     if (prevOpenAi !== undefined) process.env.OPENAI_API_KEY = prevOpenAi;
@@ -29,12 +29,12 @@ test("resolveAgentEnv prefers OpenAI from OpenClaw models.providers", () => {
       openClawConfig: {
         models: {
           providers: {
-            openai: { apiKey: "sk-test-from-config" },
+            openai: { apiKey: "test-openai-key-from-config" },
           },
         },
       },
     });
-    assert.equal(env.OPENAI_API_KEY, "sk-test-from-config");
+    assert.equal(env.OPENAI_API_KEY, "test-openai-key-from-config");
     assert.equal(env.AGENTIC_PLANNER_MODEL, "openai/gpt-4o-mini");
   } finally {
     if (prev !== undefined) process.env.OPENAI_API_KEY = prev;

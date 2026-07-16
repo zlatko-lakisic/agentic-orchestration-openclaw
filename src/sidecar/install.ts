@@ -1,8 +1,9 @@
-import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { DEFAULT_REPO_URL, findLocalCheckout, resolveRepoDir, resolveToolDir, resolveWebDir } from "./paths.js";
 import { ensureOrchestrateEndpoint } from "./inject-orchestrate.js";
+import { buildBootstrapEnv } from "./child-env.js";
 import type { PluginConfig } from "../types.js";
 
 type Logger = {
@@ -11,25 +12,69 @@ type Logger = {
   warn?: (m: string) => void;
 };
 
-function run(
-  command: string,
-  args: string[],
-  opts: { cwd: string; env?: NodeJS.ProcessEnv; timeoutMs?: number },
-  logger: Logger,
-): SpawnSyncReturns<string> {
-  logger.info(`[agentic-orchestration] $ ${command} ${args.join(" ")} (cwd=${opts.cwd})`);
-  const result = spawnSync(command, args, {
+function execOpts(opts: {
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+}): ExecFileSyncOptionsWithStringEncoding {
+  return {
     cwd: opts.cwd,
-    env: opts.env ?? process.env,
+    env: opts.env ?? buildBootstrapEnv(),
     encoding: "utf8",
     timeout: opts.timeoutMs ?? 600_000,
     shell: false,
-  });
-  if (result.status !== 0) {
-    const err = String(result.stderr || result.stdout || result.error || "unknown error").trim();
-    throw new Error(`${command} ${args.join(" ")} failed: ${err.slice(0, 2000)}`);
+    stdio: ["ignore", "pipe", "pipe"],
+  };
+}
+
+function failMsg(label: string, err: unknown): Error {
+  const e = err as { stderr?: string; stdout?: string; message?: string };
+  const detail = String(e.stderr || e.stdout || e.message || "unknown error").trim();
+  return new Error(`${label} failed: ${detail.slice(0, 2000)}`);
+}
+
+function runGit(args: string[], opts: { cwd: string }, logger: Logger): void {
+  logger.info(`[agentic-orchestration] $ git ${args.join(" ")} (cwd=${opts.cwd})`);
+  try {
+    execFileSync("git", args, execOpts(opts));
+  } catch (err) {
+    throw failMsg(`git ${args.join(" ")}`, err);
   }
-  return result;
+}
+
+function runNpm(args: string[], opts: { cwd: string; timeoutMs?: number }, logger: Logger): void {
+  logger.info(`[agentic-orchestration] $ npm ${args.join(" ")} (cwd=${opts.cwd})`);
+  try {
+    execFileSync("npm", args, execOpts(opts));
+  } catch (err) {
+    throw failMsg(`npm ${args.join(" ")}`, err);
+  }
+}
+
+function assertVenvPython(pythonPath: string): void {
+  const base = path.basename(pythonPath).toLowerCase();
+  const ok =
+    base === "python" ||
+    base === "python.exe" ||
+    /[/\\]\.venv[/\\](bin|scripts)[/\\]python(\.exe)?$/i.test(pythonPath);
+  if (!ok) {
+    throw new Error(`Refusing to run unexpected python path: ${pythonPath}`);
+  }
+}
+
+function runPython(
+  pythonPath: string,
+  args: string[],
+  opts: { cwd: string; timeoutMs?: number },
+  logger: Logger,
+): void {
+  assertVenvPython(pythonPath);
+  logger.info(`[agentic-orchestration] $ ${pythonPath} ${args.join(" ")} (cwd=${opts.cwd})`);
+  try {
+    execFileSync(pythonPath, args, execOpts(opts));
+  } catch (err) {
+    throw failMsg(`${pythonPath} ${args.join(" ")}`, err);
+  }
 }
 
 function ensureGitRepo(repoDir: string, config: PluginConfig, logger: Logger): void {
@@ -39,17 +84,57 @@ function ensureGitRepo(repoDir: string, config: PluginConfig, logger: Logger): v
     if (fs.existsSync(repoDir) && fs.readdirSync(repoDir).length > 0) {
       throw new Error(`Install dir exists but is not a git repo: ${repoDir}`);
     }
-    run("git", ["clone", "--depth", "1", repoUrl, repoDir], { cwd: path.dirname(repoDir) }, logger);
+    runGit(["clone", "--depth", "1", repoUrl, repoDir], { cwd: path.dirname(repoDir) }, logger);
     return;
   }
   if (config.autoUpdate !== false) {
     try {
-      run("git", ["fetch", "--depth", "1", "origin"], { cwd: repoDir }, logger);
-      run("git", ["reset", "--hard", "origin/HEAD"], { cwd: repoDir }, logger);
+      runGit(["fetch", "--depth", "1", "origin"], { cwd: repoDir }, logger);
+      runGit(["reset", "--hard", "origin/HEAD"], { cwd: repoDir }, logger);
     } catch (err) {
       logger.warn?.(
         `[agentic-orchestration] git update skipped: ${(err as Error).message}. Using existing checkout.`,
       );
+    }
+  }
+}
+
+function createVenv(toolDir: string, logger: Logger): void {
+  const fromEnv = process.env.AGENTIC_BOOTSTRAP_PYTHON?.trim();
+  if (fromEnv) {
+    const base = path.basename(fromEnv).toLowerCase();
+    if (!["python", "python.exe", "python3", "python3.12"].includes(base)) {
+      throw new Error(`AGENTIC_BOOTSTRAP_PYTHON must be a python binary, got: ${base}`);
+    }
+    logger.info(`[agentic-orchestration] $ ${fromEnv} -m venv .venv (cwd=${toolDir})`);
+    try {
+      execFileSync(fromEnv, ["-m", "venv", ".venv"], execOpts({ cwd: toolDir }));
+    } catch (err) {
+      throw failMsg(`${fromEnv} -m venv .venv`, err);
+    }
+    return;
+  }
+
+  if (process.platform === "win32") {
+    logger.info(`[agentic-orchestration] $ python -m venv .venv (cwd=${toolDir})`);
+    try {
+      execFileSync("python", ["-m", "venv", ".venv"], execOpts({ cwd: toolDir }));
+    } catch (err) {
+      throw failMsg("python -m venv .venv", err);
+    }
+    return;
+  }
+
+  try {
+    execFileSync("python3.12", ["-V"], execOpts({ cwd: toolDir, timeoutMs: 10_000 }));
+    logger.info(`[agentic-orchestration] $ python3.12 -m venv .venv (cwd=${toolDir})`);
+    execFileSync("python3.12", ["-m", "venv", ".venv"], execOpts({ cwd: toolDir }));
+  } catch {
+    logger.info(`[agentic-orchestration] $ python3 -m venv .venv (cwd=${toolDir})`);
+    try {
+      execFileSync("python3", ["-m", "venv", ".venv"], execOpts({ cwd: toolDir }));
+    } catch (err) {
+      throw failMsg("python3 -m venv .venv", err);
     }
   }
 }
@@ -61,13 +146,7 @@ function ensurePythonVenv(toolDir: string, logger: Logger): string {
     : path.join(toolDir, ".venv", "bin", "python");
 
   if (!fs.existsSync(venvPython)) {
-    let bootstrap =
-      process.env.AGENTIC_BOOTSTRAP_PYTHON?.trim() || (isWin ? "python" : "python3.12");
-    if (!isWin && bootstrap === "python3.12") {
-      const probe = spawnSync("python3.12", ["-V"], { encoding: "utf8" });
-      if (probe.status !== 0) bootstrap = "python3";
-    }
-    run(bootstrap, ["-m", "venv", ".venv"], { cwd: toolDir }, logger);
+    createVenv(toolDir, logger);
   }
 
   const requirements = path.join(toolDir, "requirements.txt");
@@ -75,22 +154,24 @@ function ensurePythonVenv(toolDir: string, logger: Logger): string {
     throw new Error(`Missing requirements.txt at ${requirements}`);
   }
 
-  // Fast check: dotenv importable?
-  const check = spawnSync(venvPython, ["-c", "import dotenv"], {
-    cwd: toolDir,
-    encoding: "utf8",
-    timeout: 30_000,
-  });
-  if (check.status !== 0) {
-    run(venvPython, ["-m", "pip", "install", "--upgrade", "pip"], { cwd: toolDir }, logger);
-    run(venvPython, ["-m", "pip", "install", "-r", "requirements.txt"], { cwd: toolDir, timeoutMs: 900_000 }, logger);
+  try {
+    assertVenvPython(venvPython);
+    execFileSync(venvPython, ["-c", "import dotenv"], execOpts({ cwd: toolDir, timeoutMs: 30_000 }));
+  } catch {
+    runPython(venvPython, ["-m", "pip", "install", "--upgrade", "pip"], { cwd: toolDir }, logger);
+    runPython(
+      venvPython,
+      ["-m", "pip", "install", "-r", "requirements.txt"],
+      { cwd: toolDir, timeoutMs: 900_000 },
+      logger,
+    );
   }
   return venvPython;
 }
 
 function ensureWebDeps(webDir: string, logger: Logger): void {
   if (!fs.existsSync(path.join(webDir, "node_modules", "ws"))) {
-    run("npm", ["install", "--omit=dev"], { cwd: webDir, timeoutMs: 300_000 }, logger);
+    runNpm(["install", "--omit=dev"], { cwd: webDir, timeoutMs: 300_000 }, logger);
   }
 }
 

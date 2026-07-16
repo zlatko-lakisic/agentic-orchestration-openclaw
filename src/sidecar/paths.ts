@@ -4,7 +4,7 @@ import * as os from "node:os";
 import type { PluginConfig } from "../types.js";
 
 export const DEFAULT_REPO_URL = "https://github.com/zlatko-lakisic/agentic-orchestration.git";
-export const DEFAULT_BACKEND_HOST = "127.0.0.1";
+export const DEFAULT_BACKEND_HOST = "localhost";
 export const DEFAULT_BACKEND_PORT = 3847;
 
 export function resolveDataRoot(stateDir: string, config: PluginConfig): string {

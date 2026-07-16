@@ -140,7 +140,7 @@ export function resolveAgentEnv(params: {
   const hasOllamaHint = Boolean(merged.OLLAMA_HOST || merged.AGENTIC_PLANNER_MODEL?.startsWith("ollama/"));
 
   if (!hasOpenAi && !hasAnthropic && !hasOllamaHint) {
-    merged.OLLAMA_HOST ??= "http://127.0.0.1:11434";
+    merged.OLLAMA_HOST ??= "http://localhost:11434";
     merged.OLLAMA_API_BASE ??= merged.OLLAMA_HOST;
     merged.AGENTIC_PLANNER_MODEL ??= "ollama/llama3.2";
     merged.ROUTER_OLLAMA_MODEL ??= "llama3.2";

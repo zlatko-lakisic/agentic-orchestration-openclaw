@@ -4,7 +4,7 @@ import { registerAgentReplyHook } from "./hook.js";
 import type { OpenClawPluginApi, PluginConfig } from "./types.js";
 
 const baseConfig: PluginConfig = {
-  endpoint: "http://127.0.0.1:3847/api/v1/orchestrate",
+  endpoint: "http://localhost:3847/api/v1/orchestrate",
   timeoutMs: 5_000,
   runMode: "dynamic",
   sessionPassthrough: true,
@@ -14,7 +14,7 @@ const baseConfig: PluginConfig = {
   repoUrl: "https://github.com/zlatko-lakisic/agentic-orchestration.git",
   preferLocalCheckout: true,
   autoUpdate: true,
-  backendHost: "127.0.0.1",
+  backendHost: "localhost",
   backendPort: 3847,
   bootstrapTimeoutMs: 60_000,
 };

@@ -7,7 +7,7 @@ export function resolveConfig(raw: Record<string, unknown> | undefined | null): 
     endpoint:
       typeof cfg.endpoint === "string"
         ? cfg.endpoint
-        : "http://127.0.0.1:3847/api/v1/orchestrate",
+        : "http://localhost:3847/api/v1/orchestrate",
     apiKey: typeof cfg.apiKey === "string" ? cfg.apiKey : undefined,
     timeoutMs: typeof cfg.timeoutMs === "number" ? cfg.timeoutMs : 120_000,
     runMode: cfg.runMode === "dynamic-iterative" ? "dynamic-iterative" : "dynamic",

@@ -145,7 +145,7 @@ With `sessionPassthrough: true`, OpenClaw’s `sessionKey` is sent as `sessionId
 | `installDir` | `<state>/agentic-orchestration` | Managed backend root override |
 | `preferLocalCheckout` | `true` | If `AGENTIC_ORCHESTRATION_ROOT` is set, use it. Otherwise look for `../agentic-orchestration` relative to the plugin directory (also checks `~/Projects/agentic-orchestration`). |
 | `autoUpdate` | `true` | `git fetch/reset` on start (cloned only) |
-| `backendHost` / `backendPort` | `127.0.0.1` / `3847` | Managed server bind |
+| `backendHost` / `backendPort` | `localhost` / `3847` | Managed server bind |
 | `bootstrapTimeoutMs` | `600000` | Clone + deps + health wait |
 | `endpoint` | managed URL | Used when `managedBackend=false` |
 | `apiKey` | *(none)* | Bearer for `/api/v1/orchestrate` |
@@ -176,7 +176,7 @@ With `sessionPassthrough: true`, OpenClaw’s `sessionKey` is sent as `sessionId
 ```json
 {
   "managedBackend": false,
-  "endpoint": "http://127.0.0.1:3847/api/v1/orchestrate"
+  "endpoint": "http://localhost:3847/api/v1/orchestrate"
 }
 ```
 

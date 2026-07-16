@@ -2,7 +2,7 @@
   "id": "agentic-orchestration",
   "name": "Agentic Orchestration",
   "description": "Replaces OpenClaw's native LLM call with a deterministic multi-agent workflow via CrewAI. Auto-installs and starts the agentic-orchestration backend sidecar. Supports model-agnostic routing (Ollama, OpenAI, Anthropic), MCP tools, and session-persistent memory.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "activation": {
     "onStartup": true
   },
@@ -15,7 +15,7 @@
     "properties": {
       "endpoint": {
         "type": "string",
-        "default": "http://127.0.0.1:3847/api/v1/orchestrate",
+        "default": "http://localhost:3847/api/v1/orchestrate",
         "description": "URL of the agentic-orchestration HTTP endpoint (overridden automatically when managedBackend is true)"
       },
       "apiKey": {
@@ -77,7 +77,7 @@
       },
       "backendHost": {
         "type": "string",
-        "default": "127.0.0.1",
+        "default": "localhost",
         "description": "Bind host for the managed web server"
       },
       "backendPort": {
