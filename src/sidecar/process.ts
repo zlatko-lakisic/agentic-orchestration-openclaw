@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { Worker } from "node:worker_threads";
+import * as path from "node:path";
 import type { PluginConfig } from "../types.js";
 import { buildBackendEnv } from "./child-env.js";
 import { DEFAULT_BACKEND_HOST, DEFAULT_BACKEND_PORT, resolveManagedBaseUrl } from "./paths.js";
@@ -44,8 +45,12 @@ export async function waitForBackendHealthy(params: {
   );
 }
 
+/**
+ * Runs agentic-orchestration-web inside a Node worker thread (not child_process).
+ * Python bootstrap/venv is performed by the web server itself.
+ */
 export class BackendProcess {
-  private child: ChildProcess | null = null;
+  private worker: Worker | null = null;
   private owned = false;
 
   constructor(
@@ -54,13 +59,15 @@ export class BackendProcess {
   ) {}
 
   get isOwned(): boolean {
-    return this.owned && this.child != null && !this.child.killed;
+    return this.owned && this.worker != null;
   }
 
   async start(params: {
     webDir: string;
     toolDir: string;
-    pythonPath: string;
+    pythonPath?: string;
+    /** Plugin install root — used as NODE_PATH so `ws` resolves without npm install in the checkout. */
+    pluginRootDir?: string;
   }): Promise<{ reusedExisting: boolean }> {
     const baseUrl = resolveManagedBaseUrl(this.config);
     if (await isBackendHealthy(baseUrl)) {
@@ -73,27 +80,33 @@ export class BackendProcess {
 
     const host = this.config.backendHost || DEFAULT_BACKEND_HOST;
     const port = String(this.config.backendPort || DEFAULT_BACKEND_PORT);
+    const nodePathParts = [
+      params.pluginRootDir ? path.join(params.pluginRootDir, "node_modules") : undefined,
+      process.env.NODE_PATH,
+    ].filter(Boolean) as string[];
 
     const env = buildBackendEnv({
       AGENTIC_WEB_HOST: host,
       AGENTIC_WEB_PORT: port,
-      AGENTIC_PYTHON: params.pythonPath,
       AGENTIC_TOOL_ROOT: params.toolDir,
       AGENTIC_WEB_AUTO_INSTALL_REQUIREMENTS: "1",
       AGENTIC_AUTO_ENSURE_RUNTIME: process.env.AGENTIC_AUTO_ENSURE_RUNTIME || "1",
+      ...(params.pythonPath ? { AGENTIC_PYTHON: params.pythonPath } : {}),
       ...(this.config.apiKey ? { AGENTIC_ORCHESTRATE_API_KEY: this.config.apiKey } : {}),
+      ...(nodePathParts.length ? { NODE_PATH: nodePathParts.join(path.delimiter) } : {}),
     });
 
+    const serverPath = path.join(params.webDir, "server.mjs");
     this.logger.info(
-      `[agentic-orchestration] Starting agentic-orchestration-web on ${host}:${port}`,
+      `[agentic-orchestration] Starting agentic-orchestration-web worker on ${host}:${port}`,
     );
 
-    this.child = spawn("node", ["server.mjs"], {
-      cwd: params.webDir,
+    const worker = new Worker(serverPath, {
       env,
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: false,
+      stdout: true,
+      stderr: true,
     });
+    this.worker = worker;
     this.owned = true;
 
     const pipe = (buf: Buffer, level: "info" | "error") => {
@@ -104,47 +117,36 @@ export class BackendProcess {
         else this.logger.info(`[agentic-web] ${line}`);
       }
     };
-    this.child.stdout?.on("data", (b: Buffer) => pipe(b, "info"));
-    this.child.stderr?.on("data", (b: Buffer) => pipe(b, "error"));
-    this.child.on("exit", (code, signal) => {
-      this.logger.warn?.(
-        `[agentic-orchestration] Backend exited (code=${code} signal=${signal ?? ""})`,
-      );
-      this.child = null;
+    worker.stdout?.on("data", (b: Buffer) => pipe(b, "info"));
+    worker.stderr?.on("data", (b: Buffer) => pipe(b, "error"));
+    worker.on("error", (err) => {
+      this.logger.error(`[agentic-orchestration] Backend worker error: ${err.message}`);
+    });
+    worker.on("exit", (code) => {
+      this.logger.warn?.(`[agentic-orchestration] Backend worker exited (code=${code})`);
+      this.worker = null;
       this.owned = false;
     });
 
-    await waitForBackendHealthy({
-      baseUrl,
-      timeoutMs: this.config.bootstrapTimeoutMs,
-      logger: this.logger,
-    });
+    try {
+      await waitForBackendHealthy({
+        baseUrl,
+        timeoutMs: this.config.bootstrapTimeoutMs,
+        logger: this.logger,
+      });
+    } catch (err) {
+      await this.stop();
+      throw err;
+    }
 
     return { reusedExisting: false };
   }
 
   async stop(): Promise<void> {
-    if (!this.owned || !this.child) return;
-    const child = this.child;
+    if (!this.owned || !this.worker) return;
+    const worker = this.worker;
     this.owned = false;
-    this.child = null;
-    await new Promise<void>((resolve) => {
-      const done = () => resolve();
-      child.once("exit", done);
-      try {
-        child.kill("SIGTERM");
-      } catch {
-        done();
-        return;
-      }
-      setTimeout(() => {
-        try {
-          child.kill("SIGKILL");
-        } catch {
-          /* ignore */
-        }
-        done();
-      }, 5_000).unref?.();
-    });
+    this.worker = null;
+    await worker.terminate();
   }
 }

@@ -28,7 +28,7 @@ export interface PluginConfig {
   sessionPassthrough: boolean;
   fallbackOnError: boolean;
   verboseCrew: boolean;
-  /** When true (default), clone/pull and spawn agentic-orchestration-web. */
+  /** When true (default), download/start agentic-orchestration-web as a managed worker. */
   managedBackend: boolean;
   repoUrl: string;
   /** Override install root (defaults to `<openclaw-state>/agentic-orchestration`). */

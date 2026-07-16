@@ -49,7 +49,7 @@ export class SidecarManager {
     const dataRoot = resolveDataRoot(stateDir, this.effectiveConfig);
 
     try {
-      const ensured = ensureSidecarInstalled({
+      const ensured = await ensureSidecarInstalled({
         dataRoot,
         config: this.effectiveConfig,
         pluginRootDir: this.api.rootDir,
@@ -67,6 +67,7 @@ export class SidecarManager {
         webDir: ensured.webDir,
         toolDir: ensured.toolDir,
         pythonPath: ensured.pythonPath,
+        pluginRootDir: this.api.rootDir,
       });
 
       this.ready = true;

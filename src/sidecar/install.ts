@@ -1,9 +1,12 @@
-import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
+import { createGunzip } from "node:zlib";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import * as tar from "tar";
 import { DEFAULT_REPO_URL, findLocalCheckout, resolveRepoDir, resolveToolDir, resolveWebDir } from "./paths.js";
 import { ensureOrchestrateEndpoint } from "./inject-orchestrate.js";
-import { buildBootstrapEnv } from "./child-env.js";
 import type { PluginConfig } from "../types.js";
 
 type Logger = {
@@ -12,187 +15,119 @@ type Logger = {
   warn?: (m: string) => void;
 };
 
-function execOpts(opts: {
-  cwd: string;
-  env?: NodeJS.ProcessEnv;
-  timeoutMs?: number;
-}): ExecFileSyncOptionsWithStringEncoding {
-  return {
-    cwd: opts.cwd,
-    env: opts.env ?? buildBootstrapEnv(),
-    encoding: "utf8",
-    timeout: opts.timeoutMs ?? 600_000,
-    shell: false,
-    stdio: ["ignore", "pipe", "pipe"],
-  };
-}
-
-function failMsg(label: string, err: unknown): Error {
-  const e = err as { stderr?: string; stdout?: string; message?: string };
-  const detail = String(e.stderr || e.stdout || e.message || "unknown error").trim();
-  return new Error(`${label} failed: ${detail.slice(0, 2000)}`);
-}
-
-function runGit(args: string[], opts: { cwd: string }, logger: Logger): void {
-  logger.info(`[agentic-orchestration] $ git ${args.join(" ")} (cwd=${opts.cwd})`);
-  try {
-    execFileSync("git", args, execOpts(opts));
-  } catch (err) {
-    throw failMsg(`git ${args.join(" ")}`, err);
+/** Map a GitHub repo URL to the main-branch source archive (no git binary required). */
+export function archiveUrlFromRepoUrl(repoUrl: string): string {
+  const cleaned = repoUrl.trim().replace(/\.git$/i, "");
+  const m = cleaned.match(/github\.com[/:]([^/]+)\/([^/#?]+)/i);
+  if (!m) {
+    throw new Error(`Cannot derive GitHub archive URL from repoUrl: ${repoUrl}`);
   }
+  const owner = m[1];
+  const repo = m[2].replace(/\.git$/i, "");
+  return `https://github.com/${owner}/${repo}/archive/refs/heads/main.tar.gz`;
 }
 
-function runNpm(args: string[], opts: { cwd: string; timeoutMs?: number }, logger: Logger): void {
-  logger.info(`[agentic-orchestration] $ npm ${args.join(" ")} (cwd=${opts.cwd})`);
-  try {
-    execFileSync("npm", args, execOpts(opts));
-  } catch (err) {
-    throw failMsg(`npm ${args.join(" ")}`, err);
-  }
-}
-
-function assertVenvPython(pythonPath: string): void {
-  const base = path.basename(pythonPath).toLowerCase();
-  const ok =
-    base === "python" ||
-    base === "python.exe" ||
-    /[/\\]\.venv[/\\](bin|scripts)[/\\]python(\.exe)?$/i.test(pythonPath);
-  if (!ok) {
-    throw new Error(`Refusing to run unexpected python path: ${pythonPath}`);
-  }
-}
-
-function runPython(
-  pythonPath: string,
-  args: string[],
-  opts: { cwd: string; timeoutMs?: number },
+async function downloadAndExtractArchive(
+  archiveUrl: string,
+  repoDir: string,
   logger: Logger,
-): void {
-  assertVenvPython(pythonPath);
-  logger.info(`[agentic-orchestration] $ ${pythonPath} ${args.join(" ")} (cwd=${opts.cwd})`);
+): Promise<void> {
+  logger.info(`[agentic-orchestration] Downloading ${archiveUrl}`);
+  const res = await fetch(archiveUrl, { redirect: "follow" });
+  if (!res.ok || !res.body) {
+    throw new Error(`Failed to download backend archive (${res.status} ${res.statusText}): ${archiveUrl}`);
+  }
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ao-backend-"));
   try {
-    execFileSync(pythonPath, args, execOpts(opts));
-  } catch (err) {
-    throw failMsg(`${pythonPath} ${args.join(" ")}`, err);
+    await pipeline(Readable.fromWeb(res.body as never), createGunzip(), tar.x({ cwd: tmp }));
+    const entries = fs.readdirSync(tmp).filter((n) => !n.startsWith("."));
+    if (entries.length !== 1) {
+      throw new Error(`Unexpected archive layout under ${tmp}: ${entries.join(", ") || "(empty)"}`);
+    }
+    const extracted = path.join(tmp, entries[0]!);
+    fs.mkdirSync(path.dirname(repoDir), { recursive: true });
+    if (fs.existsSync(repoDir)) {
+      fs.rmSync(repoDir, { recursive: true, force: true });
+    }
+    fs.renameSync(extracted, repoDir);
+    logger.info(`[agentic-orchestration] Backend source ready at ${repoDir}`);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 }
 
-function ensureGitRepo(repoDir: string, config: PluginConfig, logger: Logger): void {
-  const repoUrl = config.repoUrl || DEFAULT_REPO_URL;
-  if (!fs.existsSync(path.join(repoDir, ".git"))) {
-    fs.mkdirSync(path.dirname(repoDir), { recursive: true });
-    if (fs.existsSync(repoDir) && fs.readdirSync(repoDir).length > 0) {
-      throw new Error(`Install dir exists but is not a git repo: ${repoDir}`);
-    }
-    runGit(["clone", "--depth", "1", repoUrl, repoDir], { cwd: path.dirname(repoDir) }, logger);
+function looksLikeCheckout(repoDir: string): boolean {
+  return (
+    fs.existsSync(path.join(repoDir, "agentic-orchestration-web", "server.mjs")) &&
+    fs.existsSync(path.join(repoDir, "agentic-orchestration-tool", "main.py"))
+  );
+}
+
+async function ensureRemoteRepo(
+  repoDir: string,
+  config: PluginConfig,
+  logger: Logger,
+): Promise<void> {
+  const archiveUrl = archiveUrlFromRepoUrl(config.repoUrl || DEFAULT_REPO_URL);
+  if (!looksLikeCheckout(repoDir)) {
+    await downloadAndExtractArchive(archiveUrl, repoDir, logger);
     return;
   }
   if (config.autoUpdate !== false) {
     try {
-      runGit(["fetch", "--depth", "1", "origin"], { cwd: repoDir }, logger);
-      runGit(["reset", "--hard", "origin/HEAD"], { cwd: repoDir }, logger);
+      await downloadAndExtractArchive(archiveUrl, repoDir, logger);
     } catch (err) {
       logger.warn?.(
-        `[agentic-orchestration] git update skipped: ${(err as Error).message}. Using existing checkout.`,
+        `[agentic-orchestration] auto-update download skipped: ${(err as Error).message}. Using existing checkout.`,
       );
     }
   }
 }
 
-function createVenv(toolDir: string, logger: Logger): void {
-  const fromEnv = process.env.AGENTIC_BOOTSTRAP_PYTHON?.trim();
-  if (fromEnv) {
-    const base = path.basename(fromEnv).toLowerCase();
-    if (!["python", "python.exe", "python3", "python3.12"].includes(base)) {
-      throw new Error(`AGENTIC_BOOTSTRAP_PYTHON must be a python binary, got: ${base}`);
-    }
-    logger.info(`[agentic-orchestration] $ ${fromEnv} -m venv .venv (cwd=${toolDir})`);
-    try {
-      execFileSync(fromEnv, ["-m", "venv", ".venv"], execOpts({ cwd: toolDir }));
-    } catch (err) {
-      throw failMsg(`${fromEnv} -m venv .venv`, err);
-    }
-    return;
-  }
-
-  if (process.platform === "win32") {
-    logger.info(`[agentic-orchestration] $ python -m venv .venv (cwd=${toolDir})`);
-    try {
-      execFileSync("python", ["-m", "venv", ".venv"], execOpts({ cwd: toolDir }));
-    } catch (err) {
-      throw failMsg("python -m venv .venv", err);
-    }
-    return;
-  }
-
-  try {
-    execFileSync("python3.12", ["-V"], execOpts({ cwd: toolDir, timeoutMs: 10_000 }));
-    logger.info(`[agentic-orchestration] $ python3.12 -m venv .venv (cwd=${toolDir})`);
-    execFileSync("python3.12", ["-m", "venv", ".venv"], execOpts({ cwd: toolDir }));
-  } catch {
-    logger.info(`[agentic-orchestration] $ python3 -m venv .venv (cwd=${toolDir})`);
-    try {
-      execFileSync("python3", ["-m", "venv", ".venv"], execOpts({ cwd: toolDir }));
-    } catch (err) {
-      throw failMsg("python3 -m venv .venv", err);
+/**
+ * Resolve a python binary path by probing PATH (no process spawn).
+ * The managed web server creates the venv / installs deps itself.
+ */
+export function findPythonOnPath(): string | undefined {
+  const pathEnv = process.env.PATH || process.env.Path || "";
+  const names =
+    process.platform === "win32"
+      ? ["python.exe", "python3.exe", "python"]
+      : ["python3.12", "python3", "python"];
+  for (const dir of pathEnv.split(path.delimiter)) {
+    if (!dir) continue;
+    for (const name of names) {
+      const candidate = path.join(dir, name);
+      try {
+        if (fs.existsSync(candidate)) return candidate;
+      } catch {
+        /* ignore */
+      }
     }
   }
-}
-
-function ensurePythonVenv(toolDir: string, logger: Logger): string {
-  const isWin = process.platform === "win32";
-  const venvPython = isWin
-    ? path.join(toolDir, ".venv", "Scripts", "python.exe")
-    : path.join(toolDir, ".venv", "bin", "python");
-
-  if (!fs.existsSync(venvPython)) {
-    createVenv(toolDir, logger);
-  }
-
-  const requirements = path.join(toolDir, "requirements.txt");
-  if (!fs.existsSync(requirements)) {
-    throw new Error(`Missing requirements.txt at ${requirements}`);
-  }
-
-  try {
-    assertVenvPython(venvPython);
-    execFileSync(venvPython, ["-c", "import dotenv"], execOpts({ cwd: toolDir, timeoutMs: 30_000 }));
-  } catch {
-    runPython(venvPython, ["-m", "pip", "install", "--upgrade", "pip"], { cwd: toolDir }, logger);
-    runPython(
-      venvPython,
-      ["-m", "pip", "install", "-r", "requirements.txt"],
-      { cwd: toolDir, timeoutMs: 900_000 },
-      logger,
-    );
-  }
-  return venvPython;
-}
-
-function ensureWebDeps(webDir: string, logger: Logger): void {
-  if (!fs.existsSync(path.join(webDir, "node_modules", "ws"))) {
-    runNpm(["install", "--omit=dev"], { cwd: webDir, timeoutMs: 300_000 }, logger);
-  }
+  return undefined;
 }
 
 export interface EnsuredSidecar {
   repoDir: string;
   toolDir: string;
   webDir: string;
-  pythonPath: string;
+  pythonPath?: string;
   fromLocalCheckout: boolean;
 }
 
 /**
- * Ensure agentic-orchestration is present and dependencies are installed.
- * Prefer a local sibling checkout when available; otherwise clone into dataRoot.
+ * Ensure agentic-orchestration sources are present.
+ * Uses HTTPS archive download (no git/npm/python child processes in this plugin).
+ * Python venv + pip install are handled by agentic-orchestration-web on startup.
  */
-export function ensureSidecarInstalled(params: {
+export async function ensureSidecarInstalled(params: {
   dataRoot: string;
   config: PluginConfig;
   pluginRootDir?: string;
   logger: Logger;
-}): EnsuredSidecar {
+}): Promise<EnsuredSidecar> {
   const { dataRoot, config, pluginRootDir, logger } = params;
   fs.mkdirSync(dataRoot, { recursive: true });
 
@@ -205,7 +140,7 @@ export function ensureSidecarInstalled(params: {
     repoDir = local;
     fromLocalCheckout = true;
   } else {
-    ensureGitRepo(repoDir, config, logger);
+    await ensureRemoteRepo(repoDir, config, logger);
   }
 
   const toolDir = resolveToolDir(repoDir);
@@ -220,8 +155,12 @@ export function ensureSidecarInstalled(params: {
   // Upstream main may not ship /api/v1/orchestrate yet — inject when missing.
   ensureOrchestrateEndpoint(webDir, logger);
 
-  const pythonPath = ensurePythonVenv(toolDir, logger);
-  ensureWebDeps(webDir, logger);
+  const pythonPath = findPythonOnPath();
+  if (!pythonPath) {
+    logger.warn?.(
+      "[agentic-orchestration] No python3/python found on PATH; the managed web server may fail to create its venv.",
+    );
+  }
 
   return { repoDir, toolDir, webDir, pythonPath, fromLocalCheckout };
 }

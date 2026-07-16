@@ -52,8 +52,8 @@ first bootstrap.
 
 - **OpenClaw gateway ≥ 2026.3.24-beta.2**
 - **Node.js 22.19+**
-- **Python 3.12+** — `python3.12` must be on PATH (for backend bootstrap)
-- **git** — used to clone the backend on first run
+- **Python 3.12+** — `python3.12` must be on PATH (the managed web server creates its own venv)
+- **Network access to GitHub** — used on first run to download the backend source archive
 - **Local inference:** [Ollama](https://ollama.com) with any model e.g. `llama3.2`
   — or set OpenAI / Anthropic credentials in OpenClaw / your environment instead
 
@@ -115,12 +115,10 @@ Expected: output shows the plugin is active. If the backend is still bootstrappi
 On service start the plugin will:
 
 1. Prefer a **local checkout** of `agentic-orchestration` if found (`AGENTIC_ORCHESTRATION_ROOT`, then sibling dirs)
-2. Otherwise **git clone** into `<openclaw-state>/agentic-orchestration/repo`
+2. Otherwise **download** the GitHub source archive into `<openclaw-state>/agentic-orchestration/repo`
 3. Inject `/api/v1/orchestrate` into `server.mjs` if upstream does not have it yet
-4. Create a Python 3.12+ venv + `pip install -r requirements.txt`
-5. `npm install` in `agentic-orchestration-web`
-6. Map credentials: OpenClaw / env OpenAI·Anthropic keys if available, else **Ollama defaults**
-7. Spawn `node server.mjs` and wait for `/api/ping`
+4. Map credentials: OpenClaw / env OpenAI·Anthropic keys if available, else **Ollama defaults**
+5. Start `agentic-orchestration-web` in a worker thread and wait for `/api/ping` (the web server creates the Python venv / installs deps)
 
 ## How it works
 
@@ -144,7 +142,7 @@ With `sessionPassthrough: true`, OpenClaw’s `sessionKey` is sent as `sessionId
 | `repoUrl` | `https://github.com/zlatko-lakisic/agentic-orchestration` | Clone source when no local checkout |
 | `installDir` | `<state>/agentic-orchestration` | Managed backend root override |
 | `preferLocalCheckout` | `true` | If `AGENTIC_ORCHESTRATION_ROOT` is set, use it. Otherwise look for `../agentic-orchestration` relative to the plugin directory (also checks `~/Projects/agentic-orchestration`). |
-| `autoUpdate` | `true` | `git fetch/reset` on start (cloned only) |
+| `autoUpdate` | `true` | Re-download source archive on start (downloaded checkouts only) |
 | `backendHost` / `backendPort` | `localhost` / `3847` | Managed server bind |
 | `bootstrapTimeoutMs` | `600000` | Clone + deps + health wait |
 | `endpoint` | managed URL | Used when `managedBackend=false` |
@@ -155,7 +153,7 @@ With `sessionPassthrough: true`, OpenClaw’s `sessionKey` is sent as `sessionId
 | `fallbackOnError` | `false` | Fall through to native LLM on failure |
 | `verboseCrew` | `false` | CrewAI verbose |
 
-> **First-run bootstrap** (clone + venv + pip install + npm install) typically takes
+> **First-run bootstrap** (archive download + web-server venv/pip install) typically takes
 > **3–10 minutes** depending on network speed. The gateway log will show progress.
 > Do not kill the process — wait for the managed backend ready message in the logs
 > (e.g. `Managed backend ready at …`).
@@ -166,7 +164,7 @@ With `sessionPassthrough: true`, OpenClaw’s `sessionKey` is sent as `sessionId
 |---|---|
 | Hook never fires | Set `hooks.allowConversationAccess: true` |
 | Backend not ready | Check gateway logs; first bootstrap can take several minutes |
-| First run takes forever | Bootstrap clones the repo, creates a Python venv, and installs deps — allow 3–10 minutes. Watch gateway logs for progress. |
+| First run takes forever | Bootstrap downloads the backend archive and the web server creates a Python venv — allow 3–10 minutes. Watch gateway logs for progress. |
 | Ollama planner fails | `ollama pull llama3.2` (or set OpenAI/Anthropic keys) |
 | Want external server only | `managedBackend: false` |
 | Python venv fails | Install Python **3.12+** (`python3.12` on PATH) |
