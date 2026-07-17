@@ -17,6 +17,15 @@ import {
   shouldFallthroughAutomation,
 } from "./openclaw-context.js";
 
+function isSimpleUserTurn(text: string): boolean {
+  const t = text.trim();
+  if (!t || t.length > 120) return false;
+  if (/\n/.test(t)) return false;
+  return /^(who are you\??|what are you\??|hello!*|hi!*|hey!*|help\??|what can you do\??|thanks!?|thank you\.?)$/i.test(
+    t,
+  );
+}
+
 /**
  * Registers before_agent_reply (and before_reset for session continuity).
  *
@@ -108,15 +117,16 @@ export function registerAgentReplyHook(
           ? api.runtime.config.current()
           : api.config) || undefined;
 
-      const preamble = config.injectOpenClawContext
-        ? buildOpenClawContextPreamble({
-            openClawConfig,
-            workspaceDir: ctx.workspaceDir,
-            sessionKey,
-            agentId: ctx.agentId,
-            channel: ctx.channel || ctx.channelId,
-          })
-        : undefined;
+      const preamble =
+        config.injectOpenClawContext && !isSimpleUserTurn(text)
+          ? buildOpenClawContextPreamble({
+              openClawConfig,
+              workspaceDir: ctx.workspaceDir,
+              sessionKey,
+              agentId: ctx.agentId,
+              channel: ctx.channel || ctx.channelId,
+            })
+          : undefined;
       const orchestrateText = composeOrchestrateText(text, preamble);
 
       display?.markRunning();
@@ -124,12 +134,18 @@ export function registerAgentReplyHook(
         void syncSessionsToDisplayModel(api, display, sessionKey);
       }
 
+      const started = Date.now();
+      api.logger.info(
+        `[agentic-orchestration] Orchestrating session=${sessionKey || "-"} chars=${orchestrateText.length}` +
+          (isSimpleUserTurn(text) ? " simpleChat=1" : ""),
+      );
+
       let output: string;
       try {
         output = await client.orchestrate({
           text: orchestrateText,
           sessionId,
-          resetSession: resetSession || undefined,
+          resetSession: resetSession || isSimpleUserTurn(text) || undefined,
           runMode: config.runMode,
           verboseCrew: config.verboseCrew,
           selectedAgentProviderIds: config.selectedAgentProviderIds,
@@ -160,6 +176,11 @@ export function registerAgentReplyHook(
       if (display && sessionKey) {
         void syncSessionsToDisplayModel(api, display, sessionKey);
       }
+
+      api.logger.info(
+        `[agentic-orchestration] Orchestrate done session=${sessionKey || "-"} ` +
+          `elapsed_ms=${Date.now() - started} reply_chars=${output.length}`,
+      );
 
       return {
         handled: true,
