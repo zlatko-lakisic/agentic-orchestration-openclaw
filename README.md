@@ -167,6 +167,8 @@ On service start the plugin reads `mcp.servers` from OpenClaw config and writes 
 
 The managed backend gets `AGENTIC_EXTRA_MCP_PROVIDERS_PATH` pointing at that directory, so the planner can select those MCPs like any built-in AO provider. Stdio servers are spawned by AO (not attached to OpenClaw’s process). OAuth and SSE transports are skipped with a log warning.
 
+With **`managedBackend: false`** (external AO, e.g. Jetson k3s), the plugin still writes those fragments on the OpenClaw host. Point the external AO at that directory (Jetson: hostPath mount + `AGENTIC_EXTRA_MCP_PROVIDERS_PATH=/openclaw/mcp-providers:…` via `jetson-openclaw-mcp-hostpath-patch.yaml`) and allowlist synced ids such as `openclaw_filesystem` in `AGENTIC_K8S_WORKER_STDIO_MCPS`.
+
 Add MCP servers with OpenClaw as usual:
 
 ```bash

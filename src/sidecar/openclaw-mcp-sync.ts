@@ -68,6 +68,25 @@ export function mergeExtraMcpProvidersPath(existing: string | undefined, catalog
   return [abs, ...filtered].join(sep);
 }
 
+/** Richer planner keywords for common OpenClaw MCP server names. */
+function filesystemGoalKeywords(openClawName: string, id: string): string[] {
+  const base = [
+    `  - ${yamlScalar(openClawName)}`,
+    `  - "openclaw mcp"`,
+    `  - ${yamlScalar(id)}`,
+  ];
+  if (openClawName.trim().toLowerCase() !== "filesystem") return base;
+  return [
+    ...base,
+    `  - "list files"`,
+    `  - "list directory"`,
+    `  - "workspace"`,
+    `  - "read file"`,
+    `  - "absolute path"`,
+    `  - "filesystem tools"`,
+  ];
+}
+
 function yamlScalar(value: string): string {
   // Prefer JSON string quoting — always valid YAML.
   return JSON.stringify(value);
@@ -149,9 +168,7 @@ export function mapOpenClawMcpServer(serverName: string, raw: unknown): MappedOp
     `planner_hint: >-`,
     `  ${plannerHint.replace(/\s+/g, " ").trim()}`,
     `user_goal_keywords:`,
-    `  - ${yamlScalar(name)}`,
-    `  - "openclaw mcp"`,
-    `  - ${yamlScalar(id)}`,
+    ...filesystemGoalKeywords(name, id),
   ];
 
   if (command) {
