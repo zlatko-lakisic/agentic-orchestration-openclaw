@@ -63,7 +63,9 @@ export default definePluginEntry({
       `[agentic-orchestration] Plugin loaded. managedBackend=${initial.managedBackend} | endpoint=${initial.endpoint} | runMode=${initial.runMode}`,
     );
 
-    registerDisplayProvider(api, display);
+    const getConfig = () => sidecar.config;
+
+    registerDisplayProvider(api, display, getConfig);
 
     if (typeof api.registerService === "function") {
       api.registerService(createBackendService(api, initial, sidecar, display));
@@ -73,6 +75,6 @@ export default definePluginEntry({
       );
     }
 
-    registerAgentReplyHook(api, () => sidecar.config, sidecar, display);
+    registerAgentReplyHook(api, getConfig, sidecar, display);
   },
 });

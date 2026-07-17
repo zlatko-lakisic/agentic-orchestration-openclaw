@@ -196,6 +196,7 @@ Disable individually with `injectOpenClawContext`, `bridgeOpenClawTools`, or `fa
 | Symptom | Fix |
 |---|---|
 | Hook never fires | Set `hooks.allowConversationAccess: true` |
+| `LLM request failed: network connection error` / ECONNREFUSED `:3847` | OpenClaw ≥ 2026.7 may call the `agentic` OpenAI proxy instead of `before_agent_reply` for user turns. Set `backendHost` / `backendPort` (or `endpoint`) to your AO web (`30487` on Jetson NodePort). Paste a local key: `printf agentic-orchestration-local \| openclaw models auth --agent main paste-api-key --provider agentic` |
 | Backend not ready | Check gateway logs; first bootstrap can take several minutes |
 | First run takes forever | Bootstrap downloads the backend archive and the web server creates a Python venv — allow 3–10 minutes. Watch gateway logs for progress. |
 | Ollama planner fails | `ollama pull llama3.2` (or set OpenAI/Anthropic keys) |
