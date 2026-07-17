@@ -1,13 +1,19 @@
 import type { PluginConfig } from "./types.js";
-import { DEFAULT_BACKEND_HOST, DEFAULT_BACKEND_PORT, DEFAULT_REPO_URL } from "./sidecar/paths.js";
+import {
+  DEFAULT_BACKEND_HOST,
+  DEFAULT_BACKEND_PORT,
+  DEFAULT_REPO_URL,
+  normalizeLoopbackUrl,
+} from "./sidecar/paths.js";
 
 export function resolveConfig(raw: Record<string, unknown> | undefined | null): PluginConfig {
   const cfg = raw && typeof raw === "object" ? raw : {};
+  const endpoint =
+    typeof cfg.endpoint === "string"
+      ? cfg.endpoint
+      : `http://${DEFAULT_BACKEND_HOST}:${DEFAULT_BACKEND_PORT}/api/v1/orchestrate`;
   return {
-    endpoint:
-      typeof cfg.endpoint === "string"
-        ? cfg.endpoint
-        : "http://localhost:3847/api/v1/orchestrate",
+    endpoint: normalizeLoopbackUrl(endpoint),
     apiKey: typeof cfg.apiKey === "string" ? cfg.apiKey : undefined,
     timeoutMs: typeof cfg.timeoutMs === "number" ? cfg.timeoutMs : 120_000,
     runMode: cfg.runMode === "dynamic-iterative" ? "dynamic-iterative" : "dynamic",
@@ -23,5 +29,13 @@ export function resolveConfig(raw: Record<string, unknown> | undefined | null): 
     backendPort: typeof cfg.backendPort === "number" ? cfg.backendPort : DEFAULT_BACKEND_PORT,
     bootstrapTimeoutMs:
       typeof cfg.bootstrapTimeoutMs === "number" ? cfg.bootstrapTimeoutMs : 600_000,
+    selectedAgentProviderIds: Array.isArray(cfg.selectedAgentProviderIds)
+      ? cfg.selectedAgentProviderIds.map((x) => String(x).trim()).filter(Boolean)
+      : ["ollama_llama3_2_1b"],
+    syncOpenClawMcp: cfg.syncOpenClawMcp !== false,
+    injectOpenClawContext: cfg.injectOpenClawContext !== false,
+    bridgeOpenClawTools: cfg.bridgeOpenClawTools !== false,
+    bridgePort: typeof cfg.bridgePort === "number" ? cfg.bridgePort : 3848,
+    fallthroughAutomation: cfg.fallthroughAutomation !== false,
   };
 }

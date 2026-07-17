@@ -57,6 +57,8 @@ const PREFIXES = [
   "HF_",
   "HUGGINGFACE_",
   "ROUTER_",
+  "CREWAI_",
+  "LITELLM_",
 ] as const;
 
 function copyKey(out: NodeJS.ProcessEnv, key: string): void {

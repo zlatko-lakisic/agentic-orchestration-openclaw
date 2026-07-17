@@ -17,6 +17,11 @@ const baseConfig: PluginConfig = {
   backendHost: "localhost",
   backendPort: 3847,
   bootstrapTimeoutMs: 60_000,
+  syncOpenClawMcp: true,
+  injectOpenClawContext: true,
+  bridgeOpenClawTools: true,
+  bridgePort: 3848,
+  fallthroughAutomation: true,
 };
 
 test("client posts JSON and returns output", async () => {

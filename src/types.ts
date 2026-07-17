@@ -4,6 +4,7 @@ export interface OrchestrateRequest {
   resetSession?: boolean;
   runMode?: "dynamic" | "dynamic-iterative";
   verboseCrew?: boolean;
+  /** Restrict planner catalog to these agent_provider ids (e.g. ollama_llama3_2_1b). */
   selectedAgentProviderIds?: string[];
 }
 
@@ -41,6 +42,24 @@ export interface PluginConfig {
   backendPort: number;
   /** Max wait for clone + deps + health check. */
   bootstrapTimeoutMs: number;
+  /**
+   * Optional catalog restriction for dynamic planning (agent_provider ids).
+   * When unset, the managed backend uses AGENTIC_OPENAI_PROXY_DYNAMIC_AGENT_PROVIDER_IDS from .env.
+   */
+  selectedAgentProviderIds?: string[];
+  /**
+   * When true (default), map OpenClaw `mcp.servers` into AO MCP provider YAML
+   * fragments and expose them via AGENTIC_EXTRA_MCP_PROVIDERS_PATH.
+   */
+  syncOpenClawMcp: boolean;
+  /** Inject OpenClaw workspace bootstrap/memory/skills into orchestrate text. Default true. */
+  injectOpenClawContext: boolean;
+  /** Host loopback MCP bridge for browser/exec/nodes/memory. Default true. */
+  bridgeOpenClawTools: boolean;
+  /** Loopback port for the bridge control plane. Default 3848. */
+  bridgePort: number;
+  /** Do not short-circuit cron/heartbeat sessions (let native OpenClaw handle them). Default true. */
+  fallthroughAutomation: boolean;
 }
 
 /** Matches OpenClaw PluginHookBeforeAgentReplyEvent (2026.7.x). */
@@ -56,6 +75,7 @@ export interface AgentHookContext {
   channelId?: string;
   channel?: string;
   senderId?: string;
+  workspaceDir?: string;
 }
 
 /** Matches OpenClaw PluginHookBeforeAgentReplyResult. */
@@ -112,6 +132,17 @@ export interface OpenClawPluginApi {
     options?: { priority?: number; timeoutMs?: number },
   ): void;
   on(
+    event: "before_model_resolve",
+    handler: (
+      event: unknown,
+      ctx: AgentHookContext,
+    ) =>
+      | Promise<{ modelOverride?: string; providerOverride?: string } | void>
+      | { modelOverride?: string; providerOverride?: string }
+      | void,
+    options?: { priority?: number; timeoutMs?: number },
+  ): void;
+  on(
     event: "before_reset",
     handler: (
       event: BeforeResetEvent,
@@ -119,4 +150,37 @@ export interface OpenClawPluginApi {
     ) => Promise<void> | void,
     options?: { priority?: number; timeoutMs?: number },
   ): void;
+  registerProvider?: (provider: Record<string, unknown>) => void;
+  runtime?: {
+    config?: {
+      mutateConfigFile?: (opts: {
+        afterWrite: { mode: string; reason?: string };
+        mutate: (draft: Record<string, unknown>) => void;
+      }) => Promise<unknown>;
+      current?: () => Record<string, unknown>;
+    };
+    gateway?: {
+      request?: (
+        method: string,
+        params?: Record<string, unknown>,
+        options?: { timeoutMs?: number },
+      ) => Promise<unknown>;
+    };
+    nodes?: {
+      list?: (opts?: Record<string, unknown>) => Promise<unknown> | unknown;
+      invoke?: (opts?: Record<string, unknown>) => Promise<unknown> | unknown;
+    };
+    agent?: {
+      session?: {
+        listSessionEntries?: (opts?: { agentId?: string }) => Array<{ sessionKey: string }>;
+        patchSessionEntry?: (opts: {
+          agentId?: string;
+          sessionKey: string;
+          preserveActivity?: boolean;
+          update: (entry: Record<string, unknown>) => Record<string, unknown>;
+        }) => Promise<unknown>;
+      };
+      resolveAgentWorkspaceDir?: (cfg: Record<string, unknown>, agentId?: string) => string;
+    };
+  };
 }

@@ -1,4 +1,6 @@
 import { resolveConfig } from "./src/config.js";
+import { DisplayModelState } from "./src/display-model.js";
+import { registerDisplayProvider } from "./src/display-provider.js";
 import { registerAgentReplyHook } from "./src/hook.js";
 import { createBackendService } from "./src/service.js";
 import { SidecarManager } from "./src/sidecar/manager.js";
@@ -55,19 +57,22 @@ export default definePluginEntry({
   register(api) {
     const initial = resolveConfig(api.pluginConfig as Record<string, unknown>);
     const sidecar = new SidecarManager(api, initial);
+    const display = new DisplayModelState();
 
     api.logger.info(
       `[agentic-orchestration] Plugin loaded. managedBackend=${initial.managedBackend} | endpoint=${initial.endpoint} | runMode=${initial.runMode}`,
     );
 
+    registerDisplayProvider(api, display);
+
     if (typeof api.registerService === "function") {
-      api.registerService(createBackendService(api, initial, sidecar));
+      api.registerService(createBackendService(api, initial, sidecar, display));
     } else {
       api.logger.warn?.(
         "[agentic-orchestration] api.registerService unavailable; managed backend will not auto-start. Start agentic-orchestration-web manually or upgrade OpenClaw.",
       );
     }
 
-    registerAgentReplyHook(api, () => sidecar.config, sidecar);
+    registerAgentReplyHook(api, () => sidecar.config, sidecar, display);
   },
 });

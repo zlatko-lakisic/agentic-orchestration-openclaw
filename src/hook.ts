@@ -8,6 +8,14 @@ import type {
 } from "./types.js";
 import { AgenticOrchestrationClient } from "./client.js";
 import type { SidecarManager } from "./sidecar/manager.js";
+import { isBackendHealthy } from "./sidecar/process.js";
+import { DISPLAY_PROVIDER_ID, type DisplayModelState } from "./display-model.js";
+import { syncSessionsToDisplayModel } from "./display-pin.js";
+import {
+  buildOpenClawContextPreamble,
+  composeOrchestrateText,
+  shouldFallthroughAutomation,
+} from "./openclaw-context.js";
 
 /**
  * Registers before_agent_reply (and before_reset for session continuity).
@@ -22,6 +30,7 @@ export function registerAgentReplyHook(
   api: OpenClawPluginApi,
   getConfig: () => PluginConfig,
   sidecar?: SidecarManager,
+  display?: DisplayModelState,
 ): void {
   const resetPending = new Set<string>();
 
@@ -33,6 +42,19 @@ export function registerAgentReplyHook(
     }
   });
 
+  // Keep Control UI on AgenticOrchestrator even if the user picks ChatGPT in the panel.
+  api.on(
+    "before_model_resolve",
+    async () => {
+      if (!display) return;
+      return {
+        providerOverride: DISPLAY_PROVIDER_ID,
+        modelOverride: display.id,
+      };
+    },
+    { priority: 100 },
+  );
+
   api.on(
     "before_agent_reply",
     async (event: BeforeAgentReplyEvent, ctx: AgentHookContext): Promise<BeforeAgentReplyResult | void> => {
@@ -40,37 +62,83 @@ export function registerAgentReplyHook(
       if (!text) return;
 
       const config = getConfig();
-      const client = new AgenticOrchestrationClient(config);
+      const sessionKey = ctx.sessionKey;
 
-      if (sidecar && config.managedBackend && !sidecar.isReady) {
-        const detail = sidecar.error || "backend is still starting or failed to start";
-        if (config.fallbackOnError) return;
-        return {
-          handled: true,
-          reply: {
-            text: `⚠️ Agentic orchestration backend is not ready: ${detail}`,
-          },
-          reason: "agentic-orchestration-not-ready",
-        };
+      if (shouldFallthroughAutomation(sessionKey, config.fallthroughAutomation)) {
+        api.logger.info(
+          `[agentic-orchestration] Falling through automation session to native OpenClaw: ${sessionKey}`,
+        );
+        return;
       }
 
-      const sessionKey = ctx.sessionKey;
+      const client = new AgenticOrchestrationClient(config);
+
+      // OpenClaw may load the plugin twice (gateway service + agent runtime pre-warm).
+      // Only the service instance runs start(); the hook instance can still reach a
+      // healthy managed backend via HTTP — probe before failing closed.
+      if (sidecar && config.managedBackend && !sidecar.isReady) {
+        const baseUrl = config.endpoint.replace(/\/api\/v1\/orchestrate\/?$/i, "") || "http://localhost:3847";
+        const healthy = await isBackendHealthy(baseUrl, 2_000);
+        if (!healthy) {
+          const detail = sidecar.error || "backend is still starting or failed to start";
+          if (config.fallbackOnError) return;
+          return {
+            handled: true,
+            reply: {
+              text: `⚠️ Agentic orchestration backend is not ready: ${detail}`,
+            },
+            reason: "agentic-orchestration-not-ready",
+          };
+        }
+        api.logger.info(
+          "[agentic-orchestration] Sidecar manager not marked ready, but HTTP backend is healthy; proceeding.",
+        );
+      }
+
       const sessionId = config.sessionPassthrough ? (sessionKey ?? undefined) : undefined;
       const resetSession = Boolean(sessionKey && resetPending.has(sessionKey));
       if (resetSession && sessionKey) {
         resetPending.delete(sessionKey);
       }
 
+      sidecar?.setBridgeSessionKey(sessionKey);
+
+      const openClawConfig =
+        (typeof api.runtime?.config?.current === "function"
+          ? api.runtime.config.current()
+          : api.config) || undefined;
+
+      const preamble = config.injectOpenClawContext
+        ? buildOpenClawContextPreamble({
+            openClawConfig,
+            workspaceDir: ctx.workspaceDir,
+            sessionKey,
+            agentId: ctx.agentId,
+            channel: ctx.channel || ctx.channelId,
+          })
+        : undefined;
+      const orchestrateText = composeOrchestrateText(text, preamble);
+
+      display?.markRunning();
+      if (display && sessionKey) {
+        void syncSessionsToDisplayModel(api, display, sessionKey);
+      }
+
       let output: string;
       try {
         output = await client.orchestrate({
-          text,
+          text: orchestrateText,
           sessionId,
           resetSession: resetSession || undefined,
           runMode: config.runMode,
           verboseCrew: config.verboseCrew,
+          selectedAgentProviderIds: config.selectedAgentProviderIds,
         });
       } catch (err) {
+        display?.markIdle();
+        if (display && sessionKey) {
+          void syncSessionsToDisplayModel(api, display, sessionKey);
+        }
         const msg = (err as Error)?.message ?? String(err);
         api.logger.error(`[agentic-orchestration] Hook error: ${msg}`);
 
@@ -86,6 +154,11 @@ export function registerAgentReplyHook(
           },
           reason: "agentic-orchestration-error",
         };
+      }
+
+      display?.markIdle();
+      if (display && sessionKey) {
+        void syncSessionsToDisplayModel(api, display, sessionKey);
       }
 
       return {

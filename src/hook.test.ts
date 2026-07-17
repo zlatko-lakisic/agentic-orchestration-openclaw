@@ -17,6 +17,11 @@ const baseConfig: PluginConfig = {
   backendHost: "localhost",
   backendPort: 3847,
   bootstrapTimeoutMs: 60_000,
+  syncOpenClawMcp: true,
+  injectOpenClawContext: true,
+  bridgeOpenClawTools: true,
+  bridgePort: 3848,
+  fallthroughAutomation: true,
 };
 
 test("hook registers before_agent_reply with priority and timeout", () => {
@@ -31,11 +36,12 @@ test("hook registers before_agent_reply with priority and timeout", () => {
 
   registerAgentReplyHook(api, () => baseConfig);
 
-  assert.equal(registrations.length, 2);
+  assert.equal(registrations.length, 3);
   assert.equal(registrations[0]?.event, "before_reset");
-  assert.equal(registrations[1]?.event, "before_agent_reply");
-  assert.equal(registrations[1]?.opts?.priority, 100);
-  assert.equal(registrations[1]?.opts?.timeoutMs, 10_000);
+  assert.equal(registrations[1]?.event, "before_model_resolve");
+  assert.equal(registrations[2]?.event, "before_agent_reply");
+  assert.equal(registrations[2]?.opts?.priority, 100);
+  assert.equal(registrations[2]?.opts?.timeoutMs, 10_000);
 });
 
 test("hook returns handled reply from client", async () => {

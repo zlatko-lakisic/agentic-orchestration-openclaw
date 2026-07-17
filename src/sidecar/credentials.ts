@@ -87,6 +87,7 @@ function collectFromProcessEnv(): AgentEnvMapping {
     "OLLAMA_API_BASE",
     "ROUTER_OLLAMA_MODEL",
     "AGENTIC_PLANNER_MODEL",
+    "AGENTIC_OPENAI_PROXY_DYNAMIC_AGENT_PROVIDER_IDS",
   ] as const) {
     const v = process.env[k]?.trim();
     if (v) out[k] = v;
@@ -140,19 +141,50 @@ export function resolveAgentEnv(params: {
   const hasOllamaHint = Boolean(merged.OLLAMA_HOST || merged.AGENTIC_PLANNER_MODEL?.startsWith("ollama/"));
 
   if (!hasOpenAi && !hasAnthropic && !hasOllamaHint) {
-    merged.OLLAMA_HOST ??= "http://localhost:11434";
+    merged.OLLAMA_HOST ??= "http://127.0.0.1:11434";
     merged.OLLAMA_API_BASE ??= merged.OLLAMA_HOST;
-    merged.AGENTIC_PLANNER_MODEL ??= "ollama/llama3.2";
-    merged.ROUTER_OLLAMA_MODEL ??= "llama3.2";
+    // Prefer the 1B variant for local CPU — full llama3.2 (3B) often exceeds 5+ minutes per turn.
+    merged.AGENTIC_PLANNER_MODEL ??= "ollama/llama3.2:1b";
+    merged.ROUTER_OLLAMA_MODEL ??= "llama3.2:1b";
+    merged.AGENTIC_OPENAI_PROXY_DYNAMIC_AGENT_PROVIDER_IDS ??= "ollama_llama3_2_1b";
     params.logger?.info?.(
-      "[agentic-orchestration] No OpenClaw cloud API keys found; defaulting planner to Ollama (llama3.2).",
+      "[agentic-orchestration] No OpenClaw cloud API keys found; defaulting planner to Ollama (llama3.2:1b).",
     );
+  } else if (!hasOpenAi && !hasAnthropic) {
+    // Ollama already hinted (host/model present) — still pin the small local agent unless set.
+    merged.OLLAMA_HOST ??= "http://127.0.0.1:11434";
+    merged.OLLAMA_API_BASE ??= merged.OLLAMA_HOST;
+    if (
+      !merged.AGENTIC_PLANNER_MODEL ||
+      merged.AGENTIC_PLANNER_MODEL === "ollama/llama3.2" ||
+      merged.AGENTIC_PLANNER_MODEL === "ollama/llama3.2:latest"
+    ) {
+      merged.AGENTIC_PLANNER_MODEL = "ollama/llama3.2:1b";
+      merged.ROUTER_OLLAMA_MODEL = "llama3.2:1b";
+      params.logger?.info?.(
+        "[agentic-orchestration] Switching Ollama planner to llama3.2:1b (smallest local default).",
+      );
+    }
+    merged.ROUTER_OLLAMA_MODEL ??= "llama3.2:1b";
+    merged.AGENTIC_OPENAI_PROXY_DYNAMIC_AGENT_PROVIDER_IDS ??= "ollama_llama3_2_1b";
   } else if (hasOpenAi && !merged.AGENTIC_PLANNER_MODEL) {
     merged.AGENTIC_PLANNER_MODEL = "openai/gpt-4o-mini";
     merged.OPENAI_MODEL_NAME ??= "gpt-4o-mini";
   } else if (hasAnthropic && !hasOpenAi && !merged.AGENTIC_PLANNER_MODEL) {
     merged.AGENTIC_PLANNER_MODEL = "anthropic/claude-3-5-sonnet-20241022";
   }
+
+  // Avoid multi-minute LiteLLM startup hangs on SSL fetch of the remote cost map.
+  merged.LITELLM_LOCAL_MODEL_COST_MAP ??= "True";
+
+  // CrewAI 1.x first-run prompt blocks stdin for 20s and pollutes orchestrate stdout.
+  merged.CREWAI_TESTING ??= "true";
+  merged.CREWAI_TRACING_ENABLED ??= "false";
+
+  // Keep local Ollama models resident — default loop is 60s (was 5m).
+  merged.AGENTIC_OLLAMA_KEEPALIVE ??= "1";
+  merged.AGENTIC_OLLAMA_KEEP_ALIVE ??= "-1";
+  merged.AGENTIC_OLLAMA_KEEPALIVE_INTERVAL_MS ??= "60000";
 
   return merged;
 }

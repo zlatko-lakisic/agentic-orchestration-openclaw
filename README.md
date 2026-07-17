@@ -152,6 +152,39 @@ With `sessionPassthrough: true`, OpenClaw’s `sessionKey` is sent as `sessionId
 | `sessionPassthrough` | `true` | Forward OpenClaw session ID |
 | `fallbackOnError` | `false` | Fall through to native LLM on failure |
 | `verboseCrew` | `false` | CrewAI verbose |
+| `syncOpenClawMcp` | `true` | Map OpenClaw `mcp.servers` → AO MCP YAML fragments (AO launches them) |
+| `injectOpenClawContext` | `true` | Inject workspace bootstrap / memory / skills into each orchestrate prompt |
+| `bridgeOpenClawTools` | `true` | Host `openclaw_bridge` MCP (browser, exec, nodes, memory via OpenClaw) |
+| `bridgePort` | `3848` | Loopback control-plane port for the tool bridge |
+| `fallthroughAutomation` | `true` | Let native OpenClaw handle cron/heartbeat sessions |
+| `selectedAgentProviderIds` | `["ollama_llama3_2_1b"]` | Optional planner agent-provider allowlist |
+
+### OpenClaw MCP → AO
+
+On service start the plugin reads `mcp.servers` from OpenClaw config and writes AO provider fragments under:
+
+`<openclaw-state>/agentic-orchestration/openclaw-mcp-providers/openclaw_<name>.yaml`
+
+The managed backend gets `AGENTIC_EXTRA_MCP_PROVIDERS_PATH` pointing at that directory, so the planner can select those MCPs like any built-in AO provider. Stdio servers are spawned by AO (not attached to OpenClaw’s process). OAuth and SSE transports are skipped with a log warning.
+
+Add MCP servers with OpenClaw as usual:
+
+```bash
+openclaw mcp set docs '{"command":"uvx","args":["context7-mcp"]}'
+openclaw gateway restart
+```
+
+Then ask for something that needs that server’s tools.
+
+### OpenClaw context + tool bridge
+
+On each chat turn the plugin can:
+
+1. **Inject context** — workspace `AGENTS.md` / `SOUL.md` / memory / skill summaries into the orchestrate prompt
+2. **Bridge tools** — expose MCP provider `openclaw_bridge` that proxies OpenClaw `browser`, `exec`, `memory_*`, and paired `nodes` through a loopback control plane (OpenClaw keeps policy/approvals)
+3. **Fall through** — cron/heartbeat sessions skip AO so native automation tools still work
+
+Disable individually with `injectOpenClawContext`, `bridgeOpenClawTools`, or `fallthroughAutomation` set to `false`.
 
 > **First-run bootstrap** (archive download + web-server venv/pip install) typically takes
 > **3–10 minutes** depending on network speed. The gateway log will show progress.

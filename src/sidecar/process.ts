@@ -68,6 +68,8 @@ export class BackendProcess {
     pythonPath?: string;
     /** Plugin install root — used as NODE_PATH so `ws` resolves without npm install in the checkout. */
     pluginRootDir?: string;
+    /** Extra env (planner/Ollama keys) merged into the worker process. */
+    extraEnv?: Record<string, string>;
   }): Promise<{ reusedExisting: boolean }> {
     const baseUrl = resolveManagedBaseUrl(this.config);
     if (await isBackendHealthy(baseUrl)) {
@@ -86,6 +88,7 @@ export class BackendProcess {
     ].filter(Boolean) as string[];
 
     const env = buildBackendEnv({
+      ...(params.extraEnv || {}),
       AGENTIC_WEB_HOST: host,
       AGENTIC_WEB_PORT: port,
       AGENTIC_TOOL_ROOT: params.toolDir,

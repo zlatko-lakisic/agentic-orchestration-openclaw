@@ -87,17 +87,17 @@ async function ensureRemoteRepo(
 
 /**
  * Resolve a python binary path by probing PATH (no process spawn).
- * The managed web server creates the venv / installs deps itself.
+ * Prefer python3.12 across the whole PATH before falling back to python3/python.
  */
 export function findPythonOnPath(): string | undefined {
   const pathEnv = process.env.PATH || process.env.Path || "";
-  const names =
+  const dirs = pathEnv.split(path.delimiter).filter(Boolean);
+  const preferred =
     process.platform === "win32"
-      ? ["python.exe", "python3.exe", "python"]
+      ? ["python3.12.exe", "python3.exe", "python.exe", "python"]
       : ["python3.12", "python3", "python"];
-  for (const dir of pathEnv.split(path.delimiter)) {
-    if (!dir) continue;
-    for (const name of names) {
+  for (const name of preferred) {
+    for (const dir of dirs) {
       const candidate = path.join(dir, name);
       try {
         if (fs.existsSync(candidate)) return candidate;
@@ -155,11 +155,28 @@ export async function ensureSidecarInstalled(params: {
   // Upstream main may not ship /api/v1/orchestrate yet — inject when missing.
   ensureOrchestrateEndpoint(webDir, logger);
 
-  const pythonPath = findPythonOnPath();
-  if (!pythonPath) {
-    logger.warn?.(
-      "[agentic-orchestration] No python3/python found on PATH; the managed web server may fail to create its venv.",
-    );
+  // Prefer an existing tool venv — never point AGENTIC_PYTHON at Homebrew/system
+  // python (PEP 668 blocks pip install there).
+  const isWin = process.platform === "win32";
+  const venvPython = isWin
+    ? path.join(toolDir, ".venv", "Scripts", "python.exe")
+    : path.join(toolDir, ".venv", "bin", "python");
+  let pythonPath: string | undefined;
+  if (fs.existsSync(venvPython)) {
+    pythonPath = venvPython;
+    logger.info(`[agentic-orchestration] Using tool venv Python: ${pythonPath}`);
+  } else {
+    pythonPath = findPythonOnPath();
+    if (pythonPath) {
+      logger.warn?.(
+        `[agentic-orchestration] No tool .venv yet; bootstrap Python is ${pythonPath}. ` +
+          "The web server should create .venv on first run — if PEP 668 errors appear, create the venv manually.",
+      );
+    } else {
+      logger.warn?.(
+        "[agentic-orchestration] No python3/python found on PATH; the managed web server may fail to create its venv.",
+      );
+    }
   }
 
   return { repoDir, toolDir, webDir, pythonPath, fromLocalCheckout };

@@ -2,10 +2,19 @@
   "id": "agentic-orchestration",
   "name": "Agentic Orchestration",
   "description": "Replaces OpenClaw's native LLM call with a deterministic multi-agent workflow via CrewAI. Auto-installs and starts the agentic-orchestration backend sidecar. Supports model-agnostic routing (Ollama, OpenAI, Anthropic), MCP tools, and session-persistent memory.",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "activation": {
     "onStartup": true
   },
+  "providers": [
+    "agentic"
+  ],
+  "syntheticAuthRefs": [
+    "agentic"
+  ],
+  "nonSecretAuthMarkers": [
+    "agentic-orchestration-local"
+  ],
   "contracts": {
     "tools": []
   },
@@ -89,6 +98,36 @@
         "type": "number",
         "default": 600000,
         "description": "Max wait for clone, dependency install, and health check"
+      },
+      "syncOpenClawMcp": {
+        "type": "boolean",
+        "default": true,
+        "description": "Map OpenClaw mcp.servers into AO MCP provider YAML fragments (AO launches them). Set false to disable."
+      },
+      "injectOpenClawContext": {
+        "type": "boolean",
+        "default": true,
+        "description": "Inject OpenClaw workspace bootstrap, memory, and skill summaries into each orchestrate prompt"
+      },
+      "bridgeOpenClawTools": {
+        "type": "boolean",
+        "default": true,
+        "description": "Host a loopback MCP that proxies OpenClaw browser/exec/nodes/memory tools into AO"
+      },
+      "bridgePort": {
+        "type": "number",
+        "default": 3848,
+        "description": "Loopback port for the OpenClaw tool bridge control plane"
+      },
+      "fallthroughAutomation": {
+        "type": "boolean",
+        "default": true,
+        "description": "Let native OpenClaw handle cron/heartbeat sessions instead of AO"
+      },
+      "selectedAgentProviderIds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional agent_provider id allowlist for dynamic planning"
       }
     }
   }

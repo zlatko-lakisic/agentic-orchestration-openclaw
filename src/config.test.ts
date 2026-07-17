@@ -4,7 +4,7 @@ import { resolveConfig } from "./config.js";
 
 test("resolveConfig applies defaults including managedBackend", () => {
   const cfg = resolveConfig({});
-  assert.equal(cfg.endpoint, "http://localhost:3847/api/v1/orchestrate");
+  assert.equal(cfg.endpoint, "http://127.0.0.1:3847/api/v1/orchestrate");
   assert.equal(cfg.timeoutMs, 120_000);
   assert.equal(cfg.runMode, "dynamic");
   assert.equal(cfg.sessionPassthrough, true);
@@ -12,9 +12,14 @@ test("resolveConfig applies defaults including managedBackend", () => {
   assert.equal(cfg.verboseCrew, false);
   assert.equal(cfg.apiKey, undefined);
   assert.equal(cfg.managedBackend, true);
+  assert.equal(cfg.syncOpenClawMcp, true);
+  assert.equal(cfg.injectOpenClawContext, true);
+  assert.equal(cfg.bridgeOpenClawTools, true);
+  assert.equal(cfg.fallthroughAutomation, true);
   assert.equal(cfg.preferLocalCheckout, true);
   assert.equal(cfg.autoUpdate, true);
-  assert.equal(cfg.backendHost, "localhost");
+  assert.equal(cfg.backendHost, "127.0.0.1");
+  assert.deepEqual(cfg.selectedAgentProviderIds, ["ollama_llama3_2_1b"]);
   assert.equal(cfg.backendPort, 3847);
   assert.equal(cfg.bootstrapTimeoutMs, 600_000);
 });
