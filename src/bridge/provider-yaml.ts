@@ -48,9 +48,10 @@ stdio:
   command: ${JSON.stringify(command)}
   args:
     - ${JSON.stringify(serverJs)}
-  env:
-    "OPENCLAW_BRIDGE_URL": ${JSON.stringify(params.bridgeUrl)}
-    "OPENCLAW_BRIDGE_TOKEN": ${JSON.stringify(params.bridgeToken)}
+    - "--url"
+    - ${JSON.stringify(params.bridgeUrl)}
+    - "--token"
+    - ${JSON.stringify(params.bridgeToken)}
 `;
 
   const outPath = path.join(catalogDir, `${OPENCLAW_BRIDGE_PROVIDER_ID}.yaml`);

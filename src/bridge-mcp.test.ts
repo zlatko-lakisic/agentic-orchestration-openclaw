@@ -40,7 +40,8 @@ test("openclaw_bridge yaml has stdio shape CrewAI expects after normalize", () =
     const yaml = fs.readFileSync(out, "utf8");
     assert.match(yaml, /id: openclaw_bridge/);
     assert.match(yaml, /stdio:/);
-    assert.match(yaml, /OPENCLAW_BRIDGE_URL/);
+    assert.match(yaml, /--url/);
+    assert.match(yaml, /--token/);
     assert.match(yaml, /command:/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

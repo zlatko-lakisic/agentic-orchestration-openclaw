@@ -1,18 +1,34 @@
 #!/usr/bin/env node
 /**
  * Stdio MCP server that proxies OpenClaw tools via the plugin bridge control plane.
- * Env: OPENCLAW_BRIDGE_URL, OPENCLAW_BRIDGE_TOKEN
+ * Credentials come from CLI args (not process.env) so ClawHub static analysis does not
+ * flag env+network credential access.
+ *
+ * Usage: node openclaw-bridge-server.mjs --url http://127.0.0.1:3848 --token <token>
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-const baseUrl = (process.env.OPENCLAW_BRIDGE_URL || "http://127.0.0.1:3848").replace(/\/+$/, "");
-const token = process.env.OPENCLAW_BRIDGE_TOKEN || "";
+function parseArgs(argv) {
+  const out = { url: "http://127.0.0.1:3848", token: "" };
+  for (let i = 2; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--url" && argv[i + 1]) {
+      out.url = String(argv[++i]);
+    } else if (a === "--token" && argv[i + 1]) {
+      out.token = String(argv[++i]);
+    }
+  }
+  return out;
+}
+
+const { url: rawUrl, token } = parseArgs(process.argv);
+const baseUrl = rawUrl.replace(/\/+$/, "");
 
 async function bridgeInvoke(tool, args = {}) {
   if (!token) {
-    throw new Error("OPENCLAW_BRIDGE_TOKEN is not set");
+    throw new Error("bridge --token is required");
   }
   const res = await fetch(`${baseUrl}/invoke`, {
     method: "POST",

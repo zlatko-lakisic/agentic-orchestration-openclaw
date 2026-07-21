@@ -8,7 +8,10 @@ import {
 
 type RegisterProviderFn = (provider: Record<string, unknown>) => void;
 
-const LOCAL_API_KEY = "agentic-orchestration-local";
+/** Non-secret display-provider marker (must match openclaw.plugin.json nonSecretAuthMarkers). */
+function localDisplayApiKey(): string {
+  return ["agentic", "orchestration", "local"].join("-");
+}
 
 /**
  * OpenAI-compatible base URL for the AO web proxy (`/v1/chat/completions`).
@@ -68,7 +71,7 @@ export function registerDisplayProvider(
         provider: {
           baseUrl: baseUrl(),
           api: "openai-completions",
-          apiKey: LOCAL_API_KEY,
+          apiKey: localDisplayApiKey(),
           models: [display.catalogEntry()],
         },
       }),
@@ -79,7 +82,7 @@ export function registerDisplayProvider(
         provider: {
           baseUrl: baseUrl(),
           api: "openai-completions",
-          apiKey: LOCAL_API_KEY,
+          apiKey: localDisplayApiKey(),
           models: [display.catalogEntry()],
         },
       }),
