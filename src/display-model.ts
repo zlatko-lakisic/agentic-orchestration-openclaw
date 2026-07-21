@@ -6,7 +6,7 @@ export const DISPLAY_PROVIDER_ID = "agentic";
 export const DISPLAY_PROVIDER_LABEL = "AgenticOrchestrator";
 export const DISPLAY_MODEL_ALLOWLIST_KEY = `${DISPLAY_PROVIDER_ID}/*`;
 
-const DEFAULT_DISPLAY_MODEL = "llama3.2:1b";
+const DEFAULT_DISPLAY_MODEL = "llama3.2:3b";
 
 /** Strip LiteLLM-style prefixes so the UI shows a clean model id. */
 export function normalizeDisplayModelId(raw: string | undefined | null): string {

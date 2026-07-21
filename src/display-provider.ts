@@ -14,24 +14,24 @@ const LOCAL_API_KEY = "agentic-orchestration-local";
  * OpenAI-compatible base URL for the AO web proxy (`/v1/chat/completions`).
  *
  * OpenClaw ≥ 2026.7 only runs `before_agent_reply` for cron on the embedded
- * agent path; user turns call this provider like a real OpenAI endpoint. Point
- * it at the same host/port as the orchestrate backend (managed `:3847` or
- * external NodePort / checkout port).
+ * agent path; user turns call this provider like a real OpenAI endpoint. Prefer
+ * the orchestrate `endpoint` host/port (e.g. Jetson NodePort 30487) so a stale
+ * default `:3847` cannot win when `managedBackend=false`.
  */
 export function openAiCompatBaseUrl(
   config: Pick<PluginConfig, "backendHost" | "backendPort" | "endpoint">,
 ): string {
+  try {
+    const u = new URL(String(config.endpoint || "").trim());
+    if (u.host) {
+      return `${u.protocol}//${u.host}/v1`;
+    }
+  } catch {
+    /* fall through */
+  }
   const host = (config.backendHost || "127.0.0.1").trim() || "127.0.0.1";
   const port = Number(config.backendPort) > 0 ? Number(config.backendPort) : 3847;
-  if (config.backendHost || config.backendPort) {
-    return `http://${host}:${port}/v1`;
-  }
-  try {
-    const u = new URL(config.endpoint);
-    return `${u.protocol}//${u.host}/v1`;
-  } catch {
-    return "http://127.0.0.1:3847/v1";
-  }
+  return `http://${host}:${port}/v1`;
 }
 
 /**

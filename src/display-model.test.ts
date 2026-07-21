@@ -10,6 +10,7 @@ import {
 test("normalizeDisplayModelId strips provider prefixes", () => {
   assert.equal(normalizeDisplayModelId("ollama/llama3.2:1b"), "llama3.2:1b");
   assert.equal(normalizeDisplayModelId("openai/gpt-4o-mini"), "gpt-4o-mini");
+  assert.equal(normalizeDisplayModelId(""), "llama3.2:3b");
   assert.equal(displayModelRef("ollama/llama3.2:1b"), `${DISPLAY_PROVIDER_ID}/llama3.2:1b`);
 });
 
