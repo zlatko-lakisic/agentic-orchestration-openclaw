@@ -2,7 +2,7 @@
   "id": "agentic-orchestration",
   "name": "Agentic Orchestration",
   "description": "Replaces OpenClaw's native LLM call with a deterministic multi-agent workflow via CrewAI. Auto-installs and starts the agentic-orchestration backend sidecar. Supports model-agnostic routing (Ollama, OpenAI, Anthropic), MCP tools, and session-persistent memory.",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "activation": {
     "onStartup": true
   },

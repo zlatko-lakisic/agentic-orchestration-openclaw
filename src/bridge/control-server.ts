@@ -21,6 +21,19 @@ export interface BridgeHub {
   stop: () => Promise<void>;
 }
 
+function clientSafeError(err: unknown): string {
+  // Never return stack traces or multi-line dumps to the bridge client (CodeQL js/stack-trace-exposure).
+  if (err instanceof Error) {
+    const msg = String(err.message || "")
+      .split(/\r?\n/)[0]
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 400);
+    return msg || "internal error";
+  }
+  return "internal error";
+}
+
 function json(res: http.ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
@@ -188,9 +201,12 @@ export async function startBridgeHub(params: {
 
       json(res, 404, { ok: false, error: "not found" });
     } catch (err) {
+      params.api.logger.warn?.(
+        `[agentic-orchestration] bridge invoke error: ${clientSafeError(err)}`,
+      );
       json(res, 500, {
         ok: false,
-        error: (err as Error)?.message || String(err),
+        error: clientSafeError(err),
       });
     }
   });

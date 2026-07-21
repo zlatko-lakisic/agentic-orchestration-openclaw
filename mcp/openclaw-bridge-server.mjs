@@ -135,8 +135,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const result = await bridgeInvoke(def.openclawTool, args);
     return { content: [{ type: "text", text: asText(result) }] };
   } catch (err) {
+    const msg =
+      err instanceof Error
+        ? String(err.message || "bridge invoke failed").split(/\r?\n/)[0].slice(0, 400)
+        : "bridge invoke failed";
     return {
-      content: [{ type: "text", text: err?.message || String(err) }],
+      content: [{ type: "text", text: msg || "bridge invoke failed" }],
       isError: true,
     };
   }
