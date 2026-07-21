@@ -87,7 +87,6 @@ export async function createDefaultBridgeInvoker(api: OpenClawPluginApi): Promis
     ? (gateway.auth as Record<string, unknown>)
     : {}) as Record<string, unknown>;
   const port = typeof gateway.port === "number" && gateway.port > 0 ? gateway.port : 18789;
-  // Only use gateway config token — never process.env (ClawHub flags env+network as credential access).
   const token = typeof auth.token === "string" ? auth.token.trim() : "";
   const base = `http://127.0.0.1:${port}`;
 

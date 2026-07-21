@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 /**
  * Stdio MCP server that proxies OpenClaw tools via the plugin bridge control plane.
- * Credentials come from CLI args (not process.env) so ClawHub static analysis does not
- * flag env+network credential access.
  *
  * Usage: node openclaw-bridge-server.mjs --url http://127.0.0.1:3848 --token <token>
  */
