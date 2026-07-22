@@ -1,8 +1,8 @@
 {
   "id": "agentic-orchestration",
   "name": "Agentic Orchestration",
-  "description": "Replaces OpenClaw's native LLM call with a deterministic multi-agent workflow via CrewAI. Auto-installs and starts the agentic-orchestration backend sidecar. Supports model-agnostic routing (Ollama, OpenAI, Anthropic), MCP tools, and session-persistent memory.",
-  "version": "1.5.3",
+  "description": "Replaces OpenClaw's native LLM call with a deterministic multi-agent workflow via CrewAI. Can auto-install a pinned agentic-orchestration backend release as a sidecar. Routes via Ollama by default, or OpenAI/Anthropic when you supply those credentials. Supports MCP tools and session-persistent memory.",
+  "version": "1.6.0",
   "activation": {
     "onStartup": true
   },
@@ -63,12 +63,17 @@
       "managedBackend": {
         "type": "boolean",
         "default": true,
-        "description": "Download agentic-orchestration and start agentic-orchestration-web as a plugin worker"
+        "description": "Download a pinned agentic-orchestration release and start agentic-orchestration-web as a plugin worker"
       },
       "repoUrl": {
         "type": "string",
         "default": "https://github.com/zlatko-lakisic/agentic-orchestration.git",
         "description": "Git URL used when no local checkout is found"
+      },
+      "backendRef": {
+        "type": "string",
+        "default": "v1.14.0",
+        "description": "Git tag or branch for the managed archive download (default: pinned release tag, not main)"
       },
       "installDir": {
         "type": "string",
@@ -81,8 +86,18 @@
       },
       "autoUpdate": {
         "type": "boolean",
-        "default": true,
-        "description": "Re-download the GitHub source archive on start when using the managed checkout"
+        "default": false,
+        "description": "Opt-in: re-download the pinned archive on every start (default keeps the existing managed checkout)"
+      },
+      "persistCredentials": {
+        "type": "boolean",
+        "default": false,
+        "description": "Opt-in: write non-secret backend settings to tool/.env (API keys are never written; they are passed via worker env)"
+      },
+      "discoverAuthProfiles": {
+        "type": "boolean",
+        "default": false,
+        "description": "Opt-in: scan OpenClaw auth-profiles.json under the state dir (default: only models.providers + allowlisted process env)"
       },
       "backendHost": {
         "type": "string",

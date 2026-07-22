@@ -59,10 +59,10 @@ We may publish a GitHub Security Advisory (and CVE when appropriate) and credit 
 |----------|------------|
 | **OpenClaw gateway process** | The plugin runs with gateway privileges; malicious plugin code would equal host compromise |
 | **`hooks.allowConversationAccess`** | Required for this plugin; grants conversation access — only enable for plugins you trust |
-| **Managed backend bootstrap** | May fetch GitHub source archives, write under OpenClaw state dirs, create a Python venv, `npm install`, patch `server.mjs`, and spawn Node/Python |
+| **Managed backend bootstrap** | May fetch a **pinned** GitHub release archive, write under OpenClaw state dirs, create a Python venv, patch `server.mjs` when needed, and spawn Node/Python. Re-download requires `autoUpdate: true` |
 | **Local checkout preference** | `AGENTIC_ORCHESTRATION_ROOT` / sibling checkouts are trusted like operator-controlled source |
 | **HTTP bridge** | Calls `POST /api/v1/orchestrate` on the web server; auth depends on `apiKey` / `AGENTIC_ORCHESTRATE_API_KEY` |
-| **Credential mapping** | May copy OpenClaw / environment LLM keys into the backend env for providers |
+| **Credential mapping** | May copy OpenClaw `models.providers` / allowlisted env LLM keys into the backend worker env; auth-profile disk scans and `.env` writes are opt-in |
 
 ### High-impact issue classes we care about
 
@@ -83,11 +83,13 @@ We may publish a GitHub Security Advisory (and CVE when appropriate) and credit 
 1. **Only install** this plugin from the official ClawHub package name `@zlatko-lakisic/openclaw-agentic-orchestration` (verify publisher).
 2. Set **`hooks.allowConversationAccess: true` only for this trusted plugin**; review other plugins with the same privilege.
 3. Prefer a **local checkout** you control (`AGENTIC_ORCHESTRATION_ROOT` / `preferLocalCheckout`) in sensitive environments instead of downloading on first run.
-4. Set a strong shared **`apiKey`** in plugin config and the same value as **`AGENTIC_ORCHESTRATE_API_KEY`** on the web server when the HTTP port is reachable beyond localhost.
-5. For production, consider **`managedBackend: false`** and run a hardened, pinned engine deployment (see engine [SECURITY.md](https://github.com/zlatko-lakisic/agentic-orchestration/blob/main/SECURITY.md)).
-6. Restrict which MCP credentials and agent providers exist in the backend `.env` / catalogs — the plugin inherits that blast radius.
-7. Keep OpenClaw, Node, and the plugin updated; restart the gateway after upgrades.
-8. Do not paste plugin config containing secrets into public issues or chat logs.
+4. Keep **`autoUpdate: false`** (default) unless you intentionally want re-downloads; pin with `backendRef` (default `v1.14.0`).
+5. Leave **`persistCredentials`** / **`discoverAuthProfiles`** off unless you need disk `.env` materialization or auth-profile scanning.
+6. Set a strong shared **`apiKey`** in plugin config and the same value as **`AGENTIC_ORCHESTRATE_API_KEY`** on the web server when the HTTP port is reachable beyond localhost.
+7. For production, consider **`managedBackend: false`** and run a hardened, pinned engine deployment (see engine [SECURITY.md](https://github.com/zlatko-lakisic/agentic-orchestration/blob/main/SECURITY.md)).
+8. Restrict which MCP credentials and agent providers exist in the backend env / catalogs — the plugin inherits that blast radius.
+9. Keep OpenClaw, Node, and the plugin updated; restart the gateway after upgrades.
+10. Do not paste plugin config containing secrets into public issues or chat logs.
 
 ## Safe harbor
 

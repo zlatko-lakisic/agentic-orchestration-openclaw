@@ -21,6 +21,9 @@ export interface OrchestrateErrorResponse {
 
 export type AgentEnvMapping = Record<string, string>;
 
+/** Default pinned backend release for managed archive downloads (not floating main). */
+export const DEFAULT_BACKEND_REF = "v1.14.0";
+
 export interface PluginConfig {
   endpoint: string;
   apiKey?: string;
@@ -32,12 +35,27 @@ export interface PluginConfig {
   /** When true (default), download/start agentic-orchestration-web as a managed worker. */
   managedBackend: boolean;
   repoUrl: string;
+  /**
+   * Git ref for managed archive download (`refs/tags/<ref>` when it looks like a
+   * release tag, otherwise `refs/heads/<ref>`). Default: pinned release tag.
+   */
+  backendRef: string;
   /** Override install root (defaults to `<openclaw-state>/agentic-orchestration`). */
   installDir?: string;
   /** Prefer a sibling/local checkout when found. Default true. */
   preferLocalCheckout: boolean;
-  /** git fetch/reset on start when using cloned repo. Default true. */
+  /** Re-download the pinned archive on every start. Default false (opt-in). */
   autoUpdate: boolean;
+  /**
+   * When true, write discovered LLM credentials into the tool `.env` on disk.
+   * Default false — secrets are passed to the managed worker via env only.
+   */
+  persistCredentials: boolean;
+  /**
+   * When true, also scan OpenClaw `auth-profiles.json` trees under the state dir.
+   * Default false — only OpenClaw config `models.providers` + allowlisted process env.
+   */
+  discoverAuthProfiles: boolean;
   backendHost: string;
   backendPort: number;
   /** Max wait for clone + deps + health check. */

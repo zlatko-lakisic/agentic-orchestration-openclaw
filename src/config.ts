@@ -1,4 +1,5 @@
 import type { PluginConfig } from "./types.js";
+import { DEFAULT_BACKEND_REF } from "./types.js";
 import {
   DEFAULT_BACKEND_HOST,
   DEFAULT_BACKEND_PORT,
@@ -22,9 +23,18 @@ export function resolveConfig(raw: Record<string, unknown> | undefined | null): 
     verboseCrew: cfg.verboseCrew === true,
     managedBackend: cfg.managedBackend !== false,
     repoUrl: typeof cfg.repoUrl === "string" ? cfg.repoUrl : DEFAULT_REPO_URL,
+    backendRef:
+      typeof cfg.backendRef === "string" && cfg.backendRef.trim()
+        ? cfg.backendRef.trim()
+        : DEFAULT_BACKEND_REF,
     installDir: typeof cfg.installDir === "string" ? cfg.installDir : undefined,
     preferLocalCheckout: cfg.preferLocalCheckout !== false,
-    autoUpdate: cfg.autoUpdate !== false,
+    // Opt-in: floating re-download was a ClawHub supply-chain concern.
+    autoUpdate: cfg.autoUpdate === true,
+    // Opt-in: do not materialize discovered API keys into tool/.env by default.
+    persistCredentials: cfg.persistCredentials === true,
+    // Opt-in: do not walk auth-profiles.json trees unless explicitly enabled.
+    discoverAuthProfiles: cfg.discoverAuthProfiles === true,
     backendHost: typeof cfg.backendHost === "string" ? cfg.backendHost : DEFAULT_BACKEND_HOST,
     backendPort: typeof cfg.backendPort === "number" ? cfg.backendPort : DEFAULT_BACKEND_PORT,
     bootstrapTimeoutMs:

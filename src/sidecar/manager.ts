@@ -97,6 +97,7 @@ export class SidecarManager {
       const envMap = resolveAgentEnv({
         openClawConfig,
         stateDir,
+        discoverAuthProfiles: this.effectiveConfig.discoverAuthProfiles,
         logger: this.api.logger,
       });
 
@@ -109,15 +110,18 @@ export class SidecarManager {
         );
       }
 
-      writeToolEnvFile(ensured.toolDir, envMap, this.api.logger);
+      // Opt-in disk persistence only. Secrets are always passed via worker env below.
+      if (this.effectiveConfig.persistCredentials) {
+        writeToolEnvFile(ensured.toolDir, envMap, this.api.logger);
+      }
 
       const { reusedExisting } = await this.backend.start({
         webDir: ensured.webDir,
         toolDir: ensured.toolDir,
         pythonPath: ensured.pythonPath,
         pluginRootDir: this.api.rootDir,
-        // Pass planner/Ollama vars into the worker so keep-alive and LiteLLM see them
-        // before dotenv (tool .env alone is not enough for process.env at boot).
+        // Pass planner/Ollama/API vars into the worker so keep-alive and LiteLLM see them
+        // at boot without requiring a secrets-bearing .env on disk.
         extraEnv: envMap,
       });
 

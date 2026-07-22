@@ -17,7 +17,10 @@ test("resolveConfig applies defaults including managedBackend", () => {
   assert.equal(cfg.bridgeOpenClawTools, true);
   assert.equal(cfg.fallthroughAutomation, true);
   assert.equal(cfg.preferLocalCheckout, true);
-  assert.equal(cfg.autoUpdate, true);
+  assert.equal(cfg.autoUpdate, false);
+  assert.equal(cfg.persistCredentials, false);
+  assert.equal(cfg.discoverAuthProfiles, false);
+  assert.equal(cfg.backendRef, "v1.14.0");
   assert.equal(cfg.backendHost, "127.0.0.1");
   assert.deepEqual(cfg.selectedAgentProviderIds, ["ollama_llama3_2_1b"]);
   assert.equal(cfg.backendPort, 3847);
@@ -35,7 +38,10 @@ test("resolveConfig honors provided fields", () => {
     verboseCrew: true,
     managedBackend: false,
     preferLocalCheckout: false,
-    autoUpdate: false,
+    autoUpdate: true,
+    persistCredentials: true,
+    discoverAuthProfiles: true,
+    backendRef: "main",
     backendPort: 9999,
   });
   assert.equal(cfg.endpoint, "http://example:9/api/v1/orchestrate");
@@ -47,7 +53,10 @@ test("resolveConfig honors provided fields", () => {
   assert.equal(cfg.verboseCrew, true);
   assert.equal(cfg.managedBackend, false);
   assert.equal(cfg.preferLocalCheckout, false);
-  assert.equal(cfg.autoUpdate, false);
+  assert.equal(cfg.autoUpdate, true);
+  assert.equal(cfg.persistCredentials, true);
+  assert.equal(cfg.discoverAuthProfiles, true);
+  assert.equal(cfg.backendRef, "main");
   assert.equal(cfg.backendPort, 9999);
 });
 

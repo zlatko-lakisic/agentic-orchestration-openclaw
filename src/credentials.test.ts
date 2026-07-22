@@ -77,12 +77,12 @@ test("resolveAgentEnv prefers OpenAI from OpenClaw models.providers", () => {
   }
 });
 
-test("writeToolEnvFile writes env file", () => {
+test("writeToolEnvFile omits API keys from disk", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ao-env-"));
   try {
     const p = writeToolEnvFile(dir, { OPENAI_API_KEY: "abc", AGENTIC_PLANNER_MODEL: "openai/gpt-4o-mini" });
     const text = fs.readFileSync(p, "utf8");
-    assert.match(text, /OPENAI_API_KEY=abc/);
+    assert.equal(text.includes("OPENAI_API_KEY"), false);
     assert.match(text, /AGENTIC_PLANNER_MODEL=openai\/gpt-4o-mini/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

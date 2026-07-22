@@ -15,8 +15,8 @@ type Logger = {
   warn?: (m: string) => void;
 };
 
-/** Map a GitHub repo URL to the main-branch source archive (no git binary required). */
-export function archiveUrlFromRepoUrl(repoUrl: string): string {
+/** Map a GitHub repo URL to a pinned source archive (no git binary required). */
+export function archiveUrlFromRepoUrl(repoUrl: string, ref: string = "v1.14.0"): string {
   const cleaned = repoUrl.trim().replace(/\.git$/i, "");
   const m = cleaned.match(/github\.com[/:]([^/]+)\/([^/#?]+)/i);
   if (!m) {
@@ -24,7 +24,11 @@ export function archiveUrlFromRepoUrl(repoUrl: string): string {
   }
   const owner = m[1];
   const repo = m[2].replace(/\.git$/i, "");
-  return `https://github.com/${owner}/${repo}/archive/refs/heads/main.tar.gz`;
+  const trimmed = (ref || "v1.14.0").trim() || "v1.14.0";
+  // Semver release tags use refs/tags; everything else is treated as a branch.
+  const isTag = /^v?\d+\.\d+\.\d+([.-].+)?$/.test(trimmed);
+  const kind = isTag ? "tags" : "heads";
+  return `https://github.com/${owner}/${repo}/archive/refs/${kind}/${encodeURIComponent(trimmed)}.tar.gz`;
 }
 
 async function downloadAndExtractArchive(
@@ -69,12 +73,15 @@ async function ensureRemoteRepo(
   config: PluginConfig,
   logger: Logger,
 ): Promise<void> {
-  const archiveUrl = archiveUrlFromRepoUrl(config.repoUrl || DEFAULT_REPO_URL);
+  const archiveUrl = archiveUrlFromRepoUrl(
+    config.repoUrl || DEFAULT_REPO_URL,
+    config.backendRef || "v1.14.0",
+  );
   if (!looksLikeCheckout(repoDir)) {
     await downloadAndExtractArchive(archiveUrl, repoDir, logger);
     return;
   }
-  if (config.autoUpdate !== false) {
+  if (config.autoUpdate === true) {
     try {
       await downloadAndExtractArchive(archiveUrl, repoDir, logger);
     } catch (err) {
@@ -152,7 +159,7 @@ export async function ensureSidecarInstalled(params: {
     throw new Error(`agentic-orchestration-tool/main.py missing under ${repoDir}`);
   }
 
-  // Upstream main may not ship /api/v1/orchestrate yet — inject when missing.
+  // Pinned releases ship /api/v1/orchestrate; inject only when an older checkout is missing it.
   ensureOrchestrateEndpoint(webDir, logger);
 
   // Prefer an existing tool venv — never point AGENTIC_PYTHON at Homebrew/system

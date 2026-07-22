@@ -4,12 +4,16 @@
 
 Your OpenClaw agent handles one thing at a time. This plugin gives it a
 **multi-agent brain** — a planner that breaks complex requests into steps,
-routes each step to the right model, and returns one clean answer. Runs
-entirely on your machine. Sets itself up automatically.
+routes each step to the right model, and returns one clean answer. The
+orchestration stack runs on your machine (or an endpoint you configure).
+Sets itself up from a **pinned** backend release by default.
 
 Backed by [agentic-orchestration](https://github.com/zlatko-lakisic/agentic-orchestration)
 — a CrewAI-based orchestration engine that supports Ollama (local), OpenAI,
-Anthropic, and Hugging Face, picked per task from a YAML catalog.
+Anthropic, and Hugging Face, picked per task from a YAML catalog. **Privacy
+note:** with no cloud keys configured it defaults to local Ollama. If OpenAI
+or Anthropic credentials are present in OpenClaw config / allowlisted env,
+planner traffic can use those cloud providers.
 
 ## What you get
 
@@ -36,12 +40,14 @@ With this plugin, the planner breaks it into steps:
 2. **Triage agent** — scores each issue by severity and effort
 3. **Writing agent** — formats a structured summary
 
-You get one reply with a prioritised list. The whole thing runs locally if
-you have Ollama; no data leaves your machine.
+You get one reply with a prioritised list. With Ollama and no cloud API keys,
+inference stays on your machine. If you configure OpenAI/Anthropic credentials,
+those providers may be used for planning/specialist steps.
 
-> **Zero-setup backend.** On first run the plugin downloads, installs, and
-> starts the agentic-orchestration engine for you — no manual Python setup,
-> no cloning repos. If you already have a local checkout it will use that
+> **Zero-setup backend.** On first run the plugin downloads a **pinned release
+> archive** of agentic-orchestration and starts the web server — no manual
+> Python setup. It does **not** re-download on every start unless you set
+> `autoUpdate: true`. If you already have a local checkout it will use that
 > instead. To run the backend yourself, set `managedBackend: false`.
 
 ## Requirements
@@ -115,9 +121,9 @@ Expected: output shows the plugin is active. If the backend is still bootstrappi
 On service start the plugin will:
 
 1. Prefer a **local checkout** of `agentic-orchestration` if found (`AGENTIC_ORCHESTRATION_ROOT`, then sibling dirs)
-2. Otherwise **download** the GitHub source archive into `<openclaw-state>/agentic-orchestration/repo`
-3. Inject `/api/v1/orchestrate` into `server.mjs` if upstream does not have it yet
-4. Map credentials: OpenClaw / env OpenAI·Anthropic keys if available, else **Ollama defaults**
+2. Otherwise **download a pinned release archive** (`backendRef`, default `v1.14.0`) into `<openclaw-state>/agentic-orchestration/repo` (re-download only when `autoUpdate: true`)
+3. Inject `/api/v1/orchestrate` into `server.mjs` only if that route is missing
+4. Map credentials from OpenClaw `models.providers` + allowlisted process env (auth-profile disk scan is opt-in via `discoverAuthProfiles`); otherwise **Ollama defaults**. API keys are passed to the worker via env and are **not** written to `.env` unless `persistCredentials: true` (keys are still omitted from the file)
 5. Start `agentic-orchestration-web` in a worker thread and wait for `/api/ping` (the web server creates the Python venv / installs deps)
 
 ## How it works
@@ -139,10 +145,13 @@ With `sessionPassthrough: true`, OpenClaw’s `sessionKey` is sent as `sessionId
 | Key | Default | Description |
 |---|---|---|
 | `managedBackend` | `true` | Auto install + start the orchestration backend |
-| `repoUrl` | `https://github.com/zlatko-lakisic/agentic-orchestration` | Clone source when no local checkout |
+| `repoUrl` | `https://github.com/zlatko-lakisic/agentic-orchestration` | Source repo when no local checkout |
+| `backendRef` | `v1.14.0` | Pinned Git tag (or branch) for the managed archive |
 | `installDir` | `<state>/agentic-orchestration` | Managed backend root override |
 | `preferLocalCheckout` | `true` | If `AGENTIC_ORCHESTRATION_ROOT` is set, use it. Otherwise look for `../agentic-orchestration` relative to the plugin directory (also checks `~/Projects/agentic-orchestration`). |
-| `autoUpdate` | `true` | Re-download source archive on start (downloaded checkouts only) |
+| `autoUpdate` | `false` | Opt-in re-download of the pinned archive on start |
+| `persistCredentials` | `false` | Opt-in write of non-secret settings to tool `.env` |
+| `discoverAuthProfiles` | `false` | Opt-in scan of OpenClaw `auth-profiles.json` trees |
 | `backendHost` / `backendPort` | `localhost` / `3847` | Managed server bind |
 | `bootstrapTimeoutMs` | `600000` | Clone + deps + health wait |
 | `endpoint` | managed URL | Used when `managedBackend=false` |
