@@ -1,6 +1,6 @@
 {
   "name": "@zlatko-lakisic/openclaw-agentic-orchestration",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "OpenClaw plugin that auto-installs/starts agentic-orchestration and routes agent turns through the multi-agent backend",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,7 +20,7 @@
     "build": "tsc && node scripts/strip-test-artifacts.mjs",
     "dev": "tsc --watch",
     "check": "tsc --noEmit",
-    "test": "tsc && node --test dist/src/config.test.js dist/src/client.test.js dist/src/hook.test.js dist/src/credentials.test.js dist/src/inject.test.js dist/src/install.test.js dist/src/display-model.test.js dist/src/display-provider.test.js dist/src/openclaw-mcp-sync.test.js dist/src/openclaw-context.test.js dist/src/bridge-mcp.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test dist/src/config.test.js dist/src/client.test.js dist/src/hook.test.js dist/src/credentials.test.js dist/src/inject.test.js dist/src/install.test.js dist/src/display-model.test.js dist/src/display-provider.test.js dist/src/openclaw-mcp-sync.test.js dist/src/openclaw-context.test.js dist/src/bridge-mcp.test.js",
     "prepublishOnly": "npm run build"
   },
   "openclaw": {

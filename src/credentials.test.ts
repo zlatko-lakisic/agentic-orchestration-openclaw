@@ -60,12 +60,12 @@ test("resolveAgentEnv prefers OpenAI from OpenClaw models.providers", () => {
       openClawConfig: {
         models: {
           providers: {
-            openai: { apiKey: "test-openai-key-from-config" },
+            openai: { apiKey: "from-config-fixture" },
           },
         },
       },
     });
-    assert.equal(env.OPENAI_API_KEY, "test-openai-key-from-config");
+    assert.equal(env.OPENAI_API_KEY, "from-config-fixture");
     assert.equal(env.AGENTIC_PLANNER_MODEL, "openai/gpt-4o-mini");
   } finally {
     if (prev !== undefined) process.env.OPENAI_API_KEY = prev;
