@@ -1,6 +1,6 @@
 {
   "name": "@zlatko-lakisic/openclaw-agentic-orchestration",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "OpenClaw plugin that auto-installs/starts agentic-orchestration and routes agent turns through the multi-agent backend",
   "type": "module",
   "main": "./dist/index.js",
